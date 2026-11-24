@@ -43,8 +43,9 @@ An icon for the level, the title in bold, an empty line, the text:
 🔴 [web-01] FAIL main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:

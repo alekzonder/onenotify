@@ -65,8 +65,9 @@ environment variables.</p>
 <pre class="astro-code astro-code-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>🔴 [web-01] FAIL main/api-health</span></span>
 <span class="line"><span></span></span>
 <span class="line"><span>module: http</span></span>
-<span class="line"><span>headers.Authorization: Bearer ${API_TOKEN}</span></span>
-<span class="line"><span>url: https://example.com/health</span></span>
+<span class="line"><span>params:</span></span>
+<span class="line"><span>  headers.Authorization: Bearer ${API_TOKEN}</span></span>
+<span class="line"><span>  url: https://example.com/health</span></span>
 <span class="line"><span>tags: api, web</span></span>
 <span class="line"><span>at: 2026-11-24 08:11:02 UTC</span></span>
 <span class="line"><span>failed 3 runs in a row:</span></span>

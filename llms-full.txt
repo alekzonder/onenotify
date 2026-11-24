@@ -35,8 +35,9 @@ What arrived in the Telegram chat:
 🔴 [web-01] FAIL main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
@@ -1254,7 +1255,7 @@ A message as it lies in a channel's queue:
   "host": "web-01",
   "level": "error",
   "title": "[web-01] FAIL main/api-health",
-  "text": "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
+  "text": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
   "tags": [
     "api",
     "web"
@@ -1317,8 +1318,9 @@ of the onecheck config.
 nothing to say:
 
 1. `module: <module of the rule>`
-2. the rule's `params` as they are written in the onecheck config, one line
-   per value, sorted
+2. `params:` and under it the rule's `params` as they are written in the
+   onecheck config, [indented](#how-params-are-printed), one line per value,
+   sorted
 3. `tags: a, b`
 4. `at: <time of the event>` in UTC
 5. for `reminder` only: `failing since: <time of the fail event>` in UTC
@@ -1332,8 +1334,9 @@ nothing to say:
 [web-01] FAIL main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
@@ -1355,7 +1358,8 @@ timeout, a missing module), the reason is given instead of conditions:
 [web-01] FAIL main/db-port
 
 module: http
-url: http://127.0.0.1:18475/
+params:
+  url: http://127.0.0.1:18475/
 tags: db
 at: 2026-11-24 08:11:02 UTC
 error: Get "http://127.0.0.1:18475/": dial tcp 127.0.0.1:18475: connect: connection refused
@@ -1373,8 +1377,9 @@ onenotify delivers it as what it is, a failure that goes on:
 [web-01] STILL FAILING main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 09:11:14 UTC
 failing since: 2026-11-24 08:11:02 UTC
@@ -1409,7 +1414,8 @@ A `fail` or `reminder` message of this rule then ends with the output:
 [web-01] FAIL main/backup
 
 module: command
-run: /usr/local/bin/backup.sh
+params:
+  run: /usr/local/bin/backup.sh
 tags: backup
 at: 2026-11-24 03:00:41 UTC
 failed:
@@ -1446,8 +1452,9 @@ tags and `at:`. No reason, no output.
 [web-01] RECOVERED main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:20 UTC
 ```
@@ -1469,16 +1476,23 @@ at: 2026-11-24 08:11:02 UTC
 
 ### How params are printed
 
-Params are printed as `key: value`, one per line, sorted. Nested mappings are
-flattened into `a.b.c`; a list or an empty mapping is printed as compact JSON
-on one line:
+Params are printed as a block: a line `params:` and under it `key: value`,
+one per line, sorted, indented by two spaces. Nested mappings are flattened
+into `a.b.c`; a list or an empty mapping is printed as compact JSON on one
+line:
 
 ```
-argv: ["sh","-c","exit 1"]
-deep.a.b: true
-empty: {}
-n: 5
+params:
+  argv: ["sh","-c","exit 1"]
+  deep.a.b: true
+  empty: {}
+  n: 5
 ```
+
+The block keeps a param from passing for a line of the notification: a
+`systemd` rule with `state: failed` in its params says so under `params:` in
+its `RECOVERED` message too, where it is plainly the rule's setting, not the
+state of the unit. A rule without params has no `params:` line.
 
 Params are what the onecheck config file says, not what the module received:
 a secret passed as `${API_TOKEN}` stays `${API_TOKEN}`, as in the examples
@@ -1491,7 +1505,7 @@ A notification must stay readable in a chat, so the text is bounded:
 | What | Limit | When exceeded |
 |---|---|---|
 | one param value | 200 characters | cut, ends with `…` |
-| param lines | 20 | the rest is replaced by `… and N more params` |
+| param lines | 20 | the rest is replaced by an indented `… and N more params` |
 | failed conditions | 10 | the rest is replaced by `… and N more` |
 | an error or one condition's message | 300 characters | cut, ends with `…` |
 | one output field | the last 20 lines, 1000 characters | the beginning is left out, marked with `…` |
@@ -1505,7 +1519,7 @@ accepts.
 ### Other events
 
 - **An event of an older onecheck** has no `params`, `redacted`, `since` or
-  `output_fields` key. It is delivered like any other, without param lines
+  `output_fields` key. It is delivered like any other, without the `params:` block
   and without output, and is treated as not hidden:
 
   ```
@@ -2271,8 +2285,9 @@ X-Onenotify-Level: error
 X-Onenotify-Host: web-01
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
@@ -2420,7 +2435,7 @@ This is what the module publishes for a failed check:
 {
   "topic": "my-server-alerts",
   "title": "[web-01] FAIL main/api-health",
-  "message": "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
+  "message": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
   "priority": 4,
   "tags": ["rotating_light", "api", "web"]
 }
@@ -2575,8 +2590,9 @@ An icon for the level, the title in bold, an empty line, the text:
 🔴 [web-01] FAIL main/api-health
 
 module: http
-headers.Authorization: Bearer ${API_TOKEN}
-url: https://example.com/health
+params:
+  headers.Authorization: Bearer ${API_TOKEN}
+  url: https://example.com/health
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:

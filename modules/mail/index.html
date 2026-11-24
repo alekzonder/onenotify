@@ -99,8 +99,9 @@ receives it, with the body shown decoded:</p>
 <span class="line"><span>X-Onenotify-Host: web-01</span></span>
 <span class="line"><span></span></span>
 <span class="line"><span>module: http</span></span>
-<span class="line"><span>headers.Authorization: Bearer ${API_TOKEN}</span></span>
-<span class="line"><span>url: https://example.com/health</span></span>
+<span class="line"><span>params:</span></span>
+<span class="line"><span>  headers.Authorization: Bearer ${API_TOKEN}</span></span>
+<span class="line"><span>  url: https://example.com/health</span></span>
 <span class="line"><span>tags: api, web</span></span>
 <span class="line"><span>at: 2026-11-24 08:11:02 UTC</span></span>
 <span class="line"><span>failed 3 runs in a row:</span></span>
