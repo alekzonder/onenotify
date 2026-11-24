@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://alekzonder.github.io/onenotify/configuration</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/development</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/getting-started</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/logging-and-logrotate</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/messages</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/module-management</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/module-protocol</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/modules/mail</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/modules/ntfy</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/modules/telegram</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/output-and-exit-codes</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/queue-and-delivery</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify/sending</loc></url>
+  <url><loc>https://alekzonder.github.io/onenotify</loc></url>
+</urlset>

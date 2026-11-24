@@ -1,0 +1,23 @@
+# onenotify
+
+> Notifications for onecheck events and your own scripts: a queue per channel, delivery to Telegram, mail and ntfy, run by cron.
+
+## Docs
+
+- [onenotify](https://alekzonder.github.io/onenotify): Notifications for onecheck events and your own scripts.
+- [Getting started](https://alekzonder.github.io/onenotify/getting-started)
+- [Configuration](https://alekzonder.github.io/onenotify/configuration)
+- [Messages](https://alekzonder.github.io/onenotify/messages)
+- [Sending your own messages](https://alekzonder.github.io/onenotify/sending)
+- [Queue and delivery](https://alekzonder.github.io/onenotify/queue-and-delivery)
+- [Output and exit codes](https://alekzonder.github.io/onenotify/output-and-exit-codes)
+- [Module management](https://alekzonder.github.io/onenotify/module-management)
+- [Logging and logrotate](https://alekzonder.github.io/onenotify/logging-and-logrotate)
+- [Module protocol](https://alekzonder.github.io/onenotify/module-protocol)
+- [Development](https://alekzonder.github.io/onenotify/development)
+
+## Modules
+
+- [telegram module](https://alekzonder.github.io/onenotify/modules/telegram)
+- [mail module](https://alekzonder.github.io/onenotify/modules/mail)
+- [ntfy module](https://alekzonder.github.io/onenotify/modules/ntfy)
