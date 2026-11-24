@@ -53,7 +53,7 @@ sound. It never decides whether or where a message is sent.
 
 | Level | Comes from | telegram | ntfy |
 |---|---|---|---|
-| `error` | a `fail` event; `send --level error` | 🔴 | priority 4, tag `rotating_light` |
+| `error` | a `fail` or `reminder` event; `send --level error` | 🔴 | priority 4, tag `rotating_light` |
 | `ok` | a `recovered` event; `send --level ok` | 🟢 | priority 3, tag `white_check_mark` |
 | `warning` | `send --level warning` | 🟡 | priority 3, tag `warning` |
 | `info` | `send` by default; an event of any other kind | ℹ️ | priority 2, tag `information_source` |
@@ -65,13 +65,18 @@ module pages: [telegram](/modules/telegram), [mail](/modules/mail),
 ## From a onecheck event
 
 onecheck writes an [event](https://alekzonder.github.io/onecheck/state-and-events#events)
-for every confirmed change of a rule's state: `fail` (pass → fail) and
-`recovered` (fail → pass).
+for every confirmed change of a rule's state, `fail` (pass → fail) and
+`recovered` (fail → pass), and a `reminder` every `remind_every` while the
+rule stays failed.
 
-**Title**: `[<host>] FAIL <config>/<rule>` or `[<host>] RECOVERED
-<config>/<rule>`, where `<config>` is the `name` of the onecheck config.
+**Title**: `[<host>] <WORD> <config>/<rule>`, where `<config>` is the `name`
+of the onecheck config.
 
-**Level**: `fail` → `error`, `recovered` → `ok`.
+| Event | Word in the title | Level |
+|---|---|---|
+| `fail` | `FAIL` | `error` |
+| `reminder` | `STILL FAILING` | `error` |
+| `recovered` | `RECOVERED` | `ok` |
 
 **Tags**: the rule's `tags`.
 
@@ -83,7 +88,10 @@ nothing to say:
    per value, sorted
 3. `tags: a, b`
 4. `at: <time of the event>` in UTC
-5. for `fail` only: why it failed
+5. for `reminder` only: `failing since: <time of the fail event>` in UTC
+6. for `fail` and `reminder`: why it fails
+7. for `fail` and `reminder`: the [output of the check](#output-of-the-check),
+   if the rule allows it
 
 ### A failed check
 
@@ -120,10 +128,86 @@ at: 2026-11-24 08:11:02 UTC
 error: Get "http://127.0.0.1:18475/": dial tcp 127.0.0.1:18475: connect: connection refused
 ```
 
+### A reminder
+
+onecheck writes a `fail` event once. While nobody fixed the problem, it
+writes a `reminder` every `remind_every` (60 minutes by default, see
+onecheck's
+[State and events](https://alekzonder.github.io/onecheck/state-and-events#reminders)).
+onenotify delivers it as what it is, a failure that goes on:
+
+```
+[web-01] STILL FAILING main/api-health
+
+module: http
+headers.Authorization: Bearer ${API_TOKEN}
+url: https://example.com/health
+tags: api, web
+at: 2026-11-24 09:11:14 UTC
+failing since: 2026-11-24 08:11:02 UTC
+failed 63 runs in a row:
+- status: expected equals 200, got 502
+```
+
+`failing since:` is the time of the `fail` event. The reason is that of the
+run that wrote the reminder: the problem as it is now, which may differ from
+how it began. How often reminders come, and whether they come at all, is
+decided in onecheck (`remind_every`); onenotify sends every one it finds.
+
+### Output of the check
+
+A failed `exit_code: 0` does not say what went wrong; the last lines the
+command printed do. onecheck saves them in the event, and a rule can allow a
+notification to show them:
+
+```yaml
+# onecheck config
+rules:
+  - name: backup
+    module: command
+    event_output: [stderr]      # a notification may show stderr
+    params: { run: /usr/local/bin/backup.sh }
+    check: { exit_code: 0 }
+```
+
+A `fail` or `reminder` message of this rule then ends with the output:
+
+```
+[web-01] FAIL main/backup
+
+module: command
+run: /usr/local/bin/backup.sh
+tags: backup
+at: 2026-11-24 03:00:41 UTC
+failed:
+- exit_code: expected equals 0, got 12
+stderr:
+…
+rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+rsync error: error in rsync protocol data stream (code 12) at io.c(232)
+```
+
+- Only the fields the rule names in `event_output` are shown, in that order,
+  each under a line `<field>:`. Without `event_output`, which is the
+  default, there is no output in a notification.
+- Output keeps its lines. Colours and other terminal escape sequences are
+  removed, a carriage return starts a new line, a tab or another control
+  character becomes a space, spaces at line ends and empty lines at the
+  start and the end are dropped.
+- A field shows its **end**: the last 20 lines and at most 1000 characters,
+  because what went wrong is printed last. Lines left out are marked by a
+  line `…` on top. If the last line alone is longer, its last 1000
+  characters are shown after a `…`.
+- A field that holds a mapping, such as `headers` of the `http` module, is
+  printed as `key: value` lines, [like params](#how-params-are-printed).
+- A field that is empty, or missing because the rule has `output_tail: 0`,
+  is left out together with its heading.
+- A `recovered` message never shows output: there is nothing to explain.
+
 ### A recovery
 
-A `recovered` message has no fifth part: only the name, the params, the tags
-and the time.
+A `recovered` message stops after the time: only the name, the params, the
+tags and `at:`. No reason, no output.
 
 ```
 [web-01] RECOVERED main/api-health
@@ -138,9 +222,10 @@ at: 2026-11-24 08:11:20 UTC
 ### A hidden rule
 
 For a rule with `event_params: false` in onecheck, the event is marked
-`"redacted": true`. onenotify then leaves out the params and the reason of
-the failure. What remains is the rule name in the title, the module, the tags
-and the time:
+`"redacted": true`. onenotify then leaves out the params, the reason of the
+failure and the output, whatever `event_output` says. What remains is the
+rule name in the title, the module, the tags and the time (in a reminder,
+`failing since:` too):
 
 ```
 [web-01] FAIL main/token-check
@@ -176,17 +261,19 @@ A notification must stay readable in a chat, so the text is bounded:
 | param lines | 20 | the rest is replaced by `… and N more params` |
 | failed conditions | 10 | the rest is replaced by `… and N more` |
 | an error or one condition's message | 300 characters | cut, ends with `…` |
+| one output field | the last 20 lines, 1000 characters | the beginning is left out, marked with `…` |
 
 Line breaks, tabs and other control characters inside a value, an error or a
-condition's message become spaces: each stays on its line. Times are always
+condition's message become spaces: each stays on its line. Only
+[output](#output-of-the-check) keeps its line breaks. Times are always
 UTC. Each module additionally fits the whole message into what its channel
 accepts.
 
 ### Other events
 
-- **An event of an older onecheck** has no `params` and no `redacted` key. It
-  is delivered like any other, without param lines, and is treated as not
-  hidden:
+- **An event of an older onecheck** has no `params`, `redacted`, `since` or
+  `output_fields` key. It is delivered like any other, without param lines
+  and without output, and is treated as not hidden:
 
   ```
   [web-01] FAIL main/disk-root
@@ -199,7 +286,7 @@ accepts.
 
 - **An event with a `transition` onenotify does not know** gets the
   transition in upper case in the title (`[web-01] FLAPPING main/odd`), the
-  level `info`, and no failure lines. Unknown keys of an event are ignored.
+  level `info`, and neither failure lines nor output. Unknown keys of an event are ignored.
 - **The deadline** is the event's `expires_at` (onecheck's `events.ttl`,
   `24h` by default). An event without one gets `at` + `queue.ttl`.
 - **An event without `result`** is still an event: its notification has the
@@ -215,9 +302,14 @@ accepts.
 A notification leaves the host: to Telegram, to ntfy.sh, to a mail server.
 Know what is in it.
 
-**Never included**: the saved output of the check (`result.output` of the
-event: a response body, a command's stdout). It stays on the host in
-onecheck's result files.
+**Included only when the rule allows it: the saved output of the check**
+(`result.output` of the event: a response body, a command's stdout and
+stderr). By default none of it leaves the host. A rule that names fields in
+`event_output` puts the last 20 lines of each, up to 1000 characters, into
+its `fail` and `reminder` notifications, see
+[Output of the check](#output-of-the-check). Allow only output you would
+paste into the chat yourself: a script that prints its environment or a
+response body with personal data does not belong there.
 
 **Included: the params**, as written in the onecheck config. A secret passed
 as `${VAR}` is safe; a secret typed into the onecheck config as plain text is
@@ -242,7 +334,7 @@ rules:
 ```
 
 Its notifications then look like [a hidden rule](#a-hidden-rule) above: no
-params, no failure messages, no error text. `event_params: false` can be set
+params, no failure messages, no error text, no output. `event_params: false` can be set
 for all rules in onecheck's `defaults`. See onecheck's
 [State and events](https://alekzonder.github.io/onecheck/state-and-events#what-an-event-can-reveal).
 

@@ -108,5 +108,6 @@ config and scheduling with cron or systemd.
 and flag. The source is on [GitHub](https://github.com/alekzonder/onenotify).
 
 Deliberately not there: a daemon or an HTTP API, message templates, routing
-of events to some channels only, reminders about a check that is still
-failing. Every event goes to every enabled channel, once.
+of events to some channels only. Every event goes to every enabled channel,
+once. Reminders about a check that is still failing are onecheck's job: it
+writes a `reminder` event, and onenotify delivers it like any other.
