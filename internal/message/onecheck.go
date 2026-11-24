@@ -36,7 +36,10 @@ type event struct {
 	Since    *time.Time     `json:"since"`
 	Params   map[string]any `json:"params"`
 	Redacted bool           `json:"redacted"`
-	Result   *struct {
+	// OutputFields names the keys of Result.Output the rule allows a
+	// notification to show.
+	OutputFields []string `json:"output_fields"`
+	Result       *struct {
 		Module      string   `json:"module"`
 		Tags        []string `json:"tags"`
 		Status      string   `json:"status"`
@@ -44,7 +47,8 @@ type event struct {
 		Failures    []struct {
 			Message string `json:"message"`
 		} `json:"failures"`
-		Error *string `json:"error"`
+		Error  *string        `json:"error"`
+		Output map[string]any `json:"output"`
 	} `json:"result"`
 }
 
@@ -53,8 +57,9 @@ type event struct {
 //
 // What goes into the text is fixed: module, rule params as onecheck wrote
 // them, tags, time and, for a failure and a reminder of one, the error or
-// the failed conditions. A reminder also says since when the rule fails. An
-// event marked "redacted" gives only module, tags and times.
+// the failed conditions and the output fields the rule allows to show. A
+// reminder also says since when the rule fails. An event marked "redacted"
+// gives only module, tags and times.
 func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (Message, error) {
 	var ev event
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -120,6 +125,9 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 	}
 	if ev.failing() && !ev.Redacted {
 		lines = append(lines, failureLines(&ev)...)
+		if ev.Result != nil {
+			lines = append(lines, outputLines(ev.OutputFields, ev.Result.Output)...)
+		}
 	}
 	m.Text = strings.Join(lines, "\n")
 	// A message that cannot be written to a queue file is not a usable
