@@ -162,6 +162,31 @@ func (q *Queue) channelDir(channel string) string {
 	return filepath.Join(q.spool, channel)
 }
 
+// Forget removes the empty queue directory of a channel together with its
+// status. A directory that still holds anything else is left alone.
+func (q *Queue) Forget(channel string) {
+	if files, err := q.List(channel); err != nil || len(files) > 0 {
+		return
+	}
+	_ = q.ClearStatus(channel)
+	_ = os.Remove(q.channelDir(channel))
+}
+
+// CheckOwner refuses a spool that another config file already uses, without
+// claiming a spool nobody uses yet. Lock does both; this is for writing into
+// the queue without the lock.
+func (q *Queue) CheckOwner() error {
+	data, err := os.ReadFile(filepath.Join(q.spool, ownerFile))
+	if err != nil {
+		return nil
+	}
+	if owner := strings.TrimSpace(string(data)); owner != "" && owner != q.configPath {
+		return fmt.Errorf("spool %s is already used by config %s; %s must use different paths.spool and paths.failed",
+			q.spool, owner, q.configPath)
+	}
+	return nil
+}
+
 // Enqueue writes a message into a channel's queue. The write is durable, so
 // the caller may delete the source of the message right after it. Writing
 // the same id again replaces the file: enqueueing is idempotent.

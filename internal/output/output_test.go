@@ -98,3 +98,11 @@ func TestControlCharactersDoNotReachTheTerminal(t *testing.T) {
 		t.Errorf("out = %q", out)
 	}
 }
+
+func TestRecordWithoutAModule(t *testing.T) {
+	var buf bytes.Buffer
+	r := &deliver.Report{Failed: 1, Records: []deliver.Record{{Channel: "old", ID: "x", Outcome: deliver.Failed, Error: "expired"}}}
+	if err := Write(&buf, "text", r); err != nil || !strings.HasPrefix(buf.String(), "FAILED  old  x\n        expired\n") {
+		t.Errorf("out=%q err=%v", buf.String(), err)
+	}
+}

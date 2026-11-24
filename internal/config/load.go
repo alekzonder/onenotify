@@ -94,10 +94,14 @@ func decodeStrict(data []byte, out any) error {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(out); err != nil && !errors.Is(err, io.EOF) {
-		return err
+		// yaml names the Go type the key was not found in; that says
+		// nothing to a user.
+		return errors.New(inType.ReplaceAllString(err.Error(), "field $1 not found"))
 	}
 	return nil
 }
+
+var inType = regexp.MustCompile(`field (\S+) not found in type [^\n]*`)
 
 // hostname is replaced in tests.
 var hostname = os.Hostname

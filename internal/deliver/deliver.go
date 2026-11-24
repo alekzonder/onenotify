@@ -188,8 +188,18 @@ func (r *run) serve(name string) channelResult {
 	ch := r.cfg.Channel(name)
 	served := ch != nil && ch.Enabled && r.opt.selected(name)
 	if len(files) == 0 {
+		if ch == nil {
+			// What a removed channel left behind is of no use any more.
+			r.q.Forget(name)
+		}
 		return res
 	}
+	defer func() {
+		// A queue that ended up empty has nothing to be failing about.
+		if left, err := r.q.List(name); err == nil && len(left) == 0 {
+			_ = r.q.ClearStatus(name)
+		}
+	}()
 
 	var sender *sender
 	stopped := !served

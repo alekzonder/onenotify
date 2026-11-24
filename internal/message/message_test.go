@@ -53,3 +53,15 @@ func TestValidLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestSendIDsOfOneSecondKeepTheirOrder(t *testing.T) {
+	base := time.Date(2026, 11, 23, 10, 2, 0, 0, time.UTC)
+	prev := ""
+	for _, micros := range []int{0, 1, 15, 4096, 500000, 999999} {
+		id := NewSend("h", "t", "", "info", nil, base.Add(time.Duration(micros)*time.Microsecond), time.Hour).ID
+		if !regexp.MustCompile(`^20261123T100200Z-send-[0-9a-f]{8}$`).MatchString(id) || id <= prev {
+			t.Errorf("id %q after %q", id, prev)
+		}
+		prev = id
+	}
+}

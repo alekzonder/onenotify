@@ -229,7 +229,8 @@ func TestNoEnabledChannelsLeavesEventsInTheSource(t *testing.T) {
 	if rep.Ingested != 0 || len(e.files("events")) != 1 {
 		t.Errorf("report = %+v, events = %v", rep, e.files("events"))
 	}
-	if !strings.Contains(e.log.String(), "level=WARN") || !strings.Contains(e.log.String(), "no channel is enabled") {
+	// Not a warning: cron would mail it every minute.
+	if strings.Contains(e.log.String(), "level=WARN") || !strings.Contains(e.log.String(), "no channel is enabled") {
 		t.Errorf("log = %s", e.log.String())
 	}
 }
@@ -731,5 +732,36 @@ func TestEventThatCannotBeStoredDoesNotBlockTheOthers(t *testing.T) {
 	rep := e.run(e.channel("a"))
 	if rep.Sent != 1 || e.receivedIDs("a") != good || len(e.files("failed", queue.Unreadable)) != 1 {
 		t.Errorf("report = %+v, received %q", rep, e.receivedIDs("a"))
+	}
+}
+
+func TestQueueEmptiedByExpiryIsNoLongerFailing(t *testing.T) {
+	e := newEnv(t)
+	e.event(1, "fail")
+	down := e.channel("a", "mode: temporary")
+	e.run(down)
+	cfg := e.load(down)
+	if e.queue(cfg).Status("a") == nil {
+		t.Fatal("the channel must be failing first")
+	}
+	e.now = t0.Add(25 * time.Hour)
+	e.run(down)
+	if st := e.queue(cfg).Status("a"); st != nil {
+		t.Errorf("status of an empty queue = %+v", st)
+	}
+}
+
+func TestEmptyQueueOfARemovedChannelIsForgotten(t *testing.T) {
+	e := newEnv(t)
+	e.event(1, "fail")
+	e.run(e.channel("a"), e.channel("gone", "mode: temporary"))
+	e.now = t0.Add(25 * time.Hour)
+	e.run(e.channel("a")) // expires what "gone" had
+	e.run(e.channel("a")) // finds its queue empty
+	if _, err := os.Stat(e.path("spool", "gone")); err == nil {
+		t.Error("the directory of a removed channel is still there")
+	}
+	if _, err := os.Stat(e.path("spool", "a")); err != nil {
+		t.Error("the directory of a configured channel must stay")
 	}
 }

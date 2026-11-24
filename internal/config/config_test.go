@@ -308,3 +308,10 @@ func TestSpoolAndFailedMustBeApart(t *testing.T) {
 		t.Errorf("siblings with a common prefix: %v", err)
 	}
 }
+
+func TestUnknownKeyErrorDoesNotShowGoTypes(t *testing.T) {
+	_, err := load(t, "hosts: x\n")
+	if err == nil || !strings.Contains(err.Error(), "field hosts not found") || strings.Contains(err.Error(), "struct") || strings.Contains(err.Error(), "in type") {
+		t.Errorf("err = %v", err)
+	}
+}

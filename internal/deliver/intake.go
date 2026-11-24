@@ -58,7 +58,9 @@ func intake(cfg *config.Config, q *queue.Queue, now time.Time, log *slog.Logger)
 			continue
 		}
 		if len(channels) == 0 {
-			log.Warn("events are waiting but no channel is enabled; they stay in the source",
+			// Not a warning: it would be repeated, and mailed by cron, on
+			// every run. "onenotify validate" warns about it once.
+			log.Info("events are waiting but no channel is enabled; they stay in the source",
 				"source", src.Path, "events", len(files))
 			continue
 		}

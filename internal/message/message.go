@@ -5,6 +5,7 @@ package message
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -63,14 +64,18 @@ const idTime = "20060102T150405Z"
 // NewSend builds the message of "onenotify send".
 func NewSend(host, title, text, level string, tags []string, now time.Time, ttl time.Duration) Message {
 	now = now.UTC()
-	var suffix [4]byte
-	_, _ = rand.Read(suffix[:])
+	// The suffix starts with the microsecond, so that messages sent within
+	// one second still sort, and so are delivered, in the order they were
+	// sent; the random rest keeps two senders apart.
+	var random [2]byte
+	_, _ = rand.Read(random[:])
+	suffix := fmt.Sprintf("%05x%s", now.Nanosecond()/1000, hex.EncodeToString(random[:])[:3])
 	if tags == nil {
 		tags = []string{}
 	}
 	return Message{
 		Version:   Version,
-		ID:        now.Format(idTime) + "-send-" + hex.EncodeToString(suffix[:]),
+		ID:        now.Format(idTime) + "-send-" + suffix,
 		Source:    SourceSend,
 		Host:      host,
 		Level:     level,

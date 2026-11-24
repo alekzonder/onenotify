@@ -55,7 +55,8 @@ func (a *app) validateCmd() *cobra.Command {
 			if bad > 0 {
 				return fmt.Errorf("%d channel(s) of %s are not usable", bad, cfg.Path)
 			}
-			fmt.Fprintf(a.stdout, "config OK: %d channels, %d sources (%s)\n", len(cfg.Channels), len(cfg.Sources), cfg.Path)
+			fmt.Fprintf(a.stdout, "config OK: %d %s, %d %s (%s)\n", len(cfg.Channels), plural(len(cfg.Channels), "channel"),
+				len(cfg.Sources), plural(len(cfg.Sources), "source"), cfg.Path)
 			return nil
 		},
 	}

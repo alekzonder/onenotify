@@ -126,6 +126,9 @@ func (a *app) send(ctx context.Context, o *sendOptions, textGiven bool) error {
 	if err != nil {
 		return err
 	}
+	if err := q.CheckOwner(); err != nil {
+		return err
+	}
 	msg := message.NewSend(cfg.Host, o.title, text, o.level, o.tags, time.Now(), time.Duration(cfg.Queue.TTL))
 	for i, name := range targets {
 		if err := q.Enqueue(name, msg); err != nil {

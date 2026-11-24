@@ -390,7 +390,7 @@ func TestSendWhileLockedStaysQueued(t *testing.T) {
 func TestValidate(t *testing.T) {
 	e := setup(t, "", chanA+chanB)
 	code, out, errOut := execute("validate", "-c", e.cfg)
-	if code != 0 || !strings.Contains(out, "config OK: 2 channels, 1 sources") || errOut != "" {
+	if code != 0 || !strings.Contains(out, "config OK: 2 channels, 1 source (") || errOut != "" {
 		t.Errorf("code=%d out=%q err=%q", code, out, errOut)
 	}
 	if e.received("a") != nil {
@@ -633,5 +633,19 @@ func TestDebugLogNeverShowsParams(t *testing.T) {
 		if data, _ := os.ReadFile(f); strings.Contains(string(data), "s3cr3t-token") {
 			t.Errorf("%s holds a secret", f)
 		}
+	}
+}
+
+func TestSendRefusesASpoolOfAnotherConfig(t *testing.T) {
+	e := setup(t, "", chanA)
+	execute("-c", e.cfg) // claims the spool
+	other := filepath.Join(e.dir, "other.yaml")
+	data, _ := os.ReadFile(e.cfg)
+	if err := os.WriteFile(other, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errOut := execute("send", "-c", other, "--title", "t", "--queue-only")
+	if code != 2 || !strings.Contains(errOut, "already used by config") || e.queued("a") != 0 {
+		t.Errorf("code=%d err=%q queued=%d", code, errOut, e.queued("a"))
 	}
 }

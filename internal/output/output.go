@@ -57,10 +57,13 @@ func Write(w io.Writer, format string, r *deliver.Report) error {
 	}
 	for _, rec := range r.Records {
 		detail := rec.Module
-		if rec.Outcome != deliver.Failed || rec.DurationMS > 0 {
+		if rec.Module != "" && (rec.Outcome != deliver.Failed || rec.DurationMS > 0) {
 			detail = fmt.Sprintf("%s, %s", rec.Module, duration(rec.DurationMS))
 		}
-		if _, err := fmt.Fprintf(w, "%-7s %-*s  %s  (%s)\n", labels[rec.Outcome], width, rec.Channel, printable(rec.ID), detail); err != nil {
+		if detail != "" {
+			detail = "  (" + detail + ")"
+		}
+		if _, err := fmt.Fprintf(w, "%-7s %-*s  %s%s\n", labels[rec.Outcome], width, rec.Channel, printable(rec.ID), detail); err != nil {
 			return err
 		}
 		if rec.Error != "" {
