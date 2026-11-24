@@ -70,7 +70,7 @@ failed 3 runs in a row:
 - The level does not change the subject or the body. It is in the header
   `X-Onenotify-Level` (`error`, `ok`, `warning`, `info`), and the host name
   is in `X-Onenotify-Host`: use them in mail filters. The title already says
-  `FAIL` or `RECOVERED` for onecheck events.
+  `FAIL`, `STILL FAILING` or `RECOVERED` for onecheck events.
 - `Message-ID` is built from the message id and the domain of `from`, so a
   message that happens to be delivered twice has the same `Message-ID` both
   times.
