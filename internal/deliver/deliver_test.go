@@ -202,7 +202,7 @@ func TestIntakeFansOutAndDelivers(t *testing.T) {
 		if m.ID != id || m.Title != "[web-01] FAIL main/rule1" || m.Level != "error" || m.Host != "web-01" || m.Source != "onecheck" {
 			t.Errorf("%s got %+v", ch, m)
 		}
-		if !strings.Contains(m.Text, "module: disk\npath: /\ntags: disk\n") || !strings.Contains(m.Text, "- used_percent: expected lt 90, got 97") {
+		if !strings.Contains(m.Text, "module: disk\nparams:\n  path: /\ntags: disk\n") || !strings.Contains(m.Text, "- used_percent: expected lt 90, got 97") {
 			t.Errorf("%s text = %q", ch, m.Text)
 		}
 		if got[0].Channel != ch || got[0].TimeoutMS != 5000 {

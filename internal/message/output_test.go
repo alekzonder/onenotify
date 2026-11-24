@@ -34,7 +34,7 @@ func TestOutputBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
+	want := "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\n" +
 		"tags: api, web\nat: 2026-11-23 10:02:00 UTC\n" +
 		"failed 3 runs in a row:\n- status: expected equals 200, got 503\n" +
 		"stderr:\none\ntwo"

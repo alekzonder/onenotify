@@ -73,7 +73,7 @@ func TestFromOnecheckText(t *testing.T) {
 	}
 	var manyParamLines []string
 	for i := 0; i < 20; i++ {
-		manyParamLines = append(manyParamLines, fmt.Sprintf("p%02d: %d", i, i))
+		manyParamLines = append(manyParamLines, fmt.Sprintf("  p%02d: %d", i, i))
 	}
 
 	cases := []struct {
@@ -88,8 +88,9 @@ func TestFromOnecheckText(t *testing.T) {
 			name:  "fail with nested params",
 			title: "[web-01] FAIL main/api-health", level: "error",
 			text: "module: http\n" +
-				"headers.Authorization: Bearer ${API_TOKEN}\n" +
-				"url: https://example.com/health\n" +
+				"params:\n" +
+				"  headers.Authorization: Bearer ${API_TOKEN}\n" +
+				"  url: https://example.com/health\n" +
 				"tags: api, web\n" +
 				"at: 2026-11-23 10:02:00 UTC\n" +
 				"failed 3 runs in a row:\n" +
@@ -99,7 +100,7 @@ func TestFromOnecheckText(t *testing.T) {
 			name:   "first failure",
 			result: map[string]any{"consecutive": 1},
 			title:  "[web-01] FAIL main/api-health", level: "error",
-			text: "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
+			text: "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\n" +
 				"tags: api, web\nat: 2026-11-23 10:02:00 UTC\nfailed:\n- status: expected equals 200, got 503",
 		},
 		{
@@ -115,8 +116,18 @@ func TestFromOnecheckText(t *testing.T) {
 				"at": "2026-11-23T10:14:00Z", "since": "2026-11-23T10:14:00Z"},
 			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "consecutive": 2},
 			title:  "[web-01] RECOVERED main/api-health", level: "ok",
-			text: "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
+			text: "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\n" +
 				"tags: api, web\nat: 2026-11-23 10:14:00 UTC",
+		},
+		{
+			// A param named like a field of the text must not read as one:
+			// "state: failed" in a recovery is the rule's param, not its state.
+			name: "params that look like status lines stay inside the params block",
+			top: map[string]any{"id": "20261123T101400Z-main-api-health-recovered", "transition": "recovered",
+				"at": "2026-11-23T10:14:00Z", "params": map[string]any{"unit": "nginx", "state": "failed"}},
+			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "module": "systemd", "tags": nil},
+			title:  "[web-01] RECOVERED main/api-health", level: "ok",
+			text: "module: systemd\nparams:\n  state: failed\n  unit: nginx\nat: 2026-11-23 10:14:00 UTC",
 		},
 		{
 			name:  "event of an older onecheck without params",
@@ -142,7 +153,7 @@ func TestFromOnecheckText(t *testing.T) {
 			top:    map[string]any{"params": map[string]any{"path": "/"}},
 			result: map[string]any{"tags": []string{}, "module": "disk"},
 			title:  "[web-01] FAIL main/api-health", level: "error",
-			text: "module: disk\npath: /\nat: 2026-11-23 10:02:00 UTC\n" +
+			text: "module: disk\nparams:\n  path: /\nat: 2026-11-23 10:02:00 UTC\n" +
 				"failed 3 runs in a row:\n- status: expected equals 200, got 503",
 		},
 		{
@@ -150,7 +161,7 @@ func TestFromOnecheckText(t *testing.T) {
 			top:    map[string]any{"params": manyParams},
 			result: map[string]any{"tags": nil, "failures": []any{}},
 			title:  "[web-01] FAIL main/api-health", level: "error",
-			text: "module: http\n" + strings.Join(manyParamLines, "\n") + "\n… and 5 more params\n" +
+			text: "module: http\nparams:\n" + strings.Join(manyParamLines, "\n") + "\n  … and 5 more params\n" +
 				"at: 2026-11-23 10:02:00 UTC",
 		},
 		{
@@ -167,7 +178,7 @@ func TestFromOnecheckText(t *testing.T) {
 			result: map[string]any{"tags": nil, "failures": []map[string]any{
 				{"message": "body: got \"line one\nline two\r\n\tthree " + long + "\""}}},
 			title: "[web-01] FAIL main/api-health", level: "error",
-			text: "module: http\nbody: " + strings.Repeat("я", 200) + "…\nat: 2026-11-23 10:02:00 UTC\n" +
+			text: "module: http\nparams:\n  body: " + strings.Repeat("я", 200) + "…\nat: 2026-11-23 10:02:00 UTC\n" +
 				"failed 3 runs in a row:\n- " +
 				"body: got \"line one line two   three " + strings.Repeat("я", 300-len("body: got \"line one line two   three ")) + "…",
 		},
@@ -181,15 +192,16 @@ func TestFromOnecheckText(t *testing.T) {
 			result: map[string]any{"tags": nil, "failures": []any{}},
 			title:  "[web-01] FAIL main/api-health", level: "error",
 			text: "module: http\n" +
-				"argv: [\"sh\",\"-c\",\"echo <ok> & exit\"]\n" +
-				"big: 12345678901\n" +
-				"deep.a.b: c\n" +
-				"empty: {}\n" +
-				"flag: true\n" +
-				"mixed: [{\"k\":\"v\"},2]\n" +
-				"multi: a b\n" +
-				"n: 1.5\n" +
-				"none: null\n" +
+				"params:\n" +
+				"  argv: [\"sh\",\"-c\",\"echo <ok> & exit\"]\n" +
+				"  big: 12345678901\n" +
+				"  deep.a.b: c\n" +
+				"  empty: {}\n" +
+				"  flag: true\n" +
+				"  mixed: [{\"k\":\"v\"},2]\n" +
+				"  multi: a b\n" +
+				"  n: 1.5\n" +
+				"  none: null\n" +
 				"at: 2026-11-23 10:02:00 UTC",
 		},
 		{
@@ -197,7 +209,7 @@ func TestFromOnecheckText(t *testing.T) {
 			top:    reminder(nil),
 			result: map[string]any{"consecutive": 63},
 			title:  "[web-01] STILL FAILING main/api-health", level: "error",
-			text: "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
+			text: "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\n" +
 				"tags: api, web\nat: 2026-11-23 11:02:15 UTC\nfailing since: 2026-11-23 10:02:00 UTC\n" +
 				"failed 63 runs in a row:\n- status: expected equals 200, got 503",
 		},

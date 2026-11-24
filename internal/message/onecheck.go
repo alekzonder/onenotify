@@ -196,19 +196,32 @@ func failureLines(ev *event) []string {
 	return lines
 }
 
-// paramLines prints rule params one per line as "key: value", sorted by key.
+// paramLines prints rule params as a block: a line "params:" and under it
+// one indented line "key: value" per param, sorted by key. The block keeps a
+// param such as "state: failed" from reading as a line of the text itself.
 // Nested objects become "a.b.c"; anything else that is not a scalar is
-// printed as compact JSON.
+// printed as compact JSON. No params, no block.
 func paramLines(params map[string]any) []string {
 	var lines []string
 	flatten("", params, &lines)
+	if len(lines) == 0 {
+		return nil
+	}
 	sort.Strings(lines)
 	if len(lines) > maxParamLines {
 		more := len(lines) - maxParamLines
 		lines = append(lines[:maxParamLines:maxParamLines], fmt.Sprintf("… and %d more params", more))
 	}
-	return lines
+	block := make([]string, 0, len(lines)+1)
+	block = append(block, "params:")
+	for _, line := range lines {
+		block = append(block, paramIndent+line)
+	}
+	return block
 }
+
+// paramIndent sets a param line apart from the lines around the params block.
+const paramIndent = "  "
 
 func flatten(prefix string, obj map[string]any, lines *[]string) {
 	for key, value := range obj {
