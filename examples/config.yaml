@@ -1,0 +1,81 @@
+# Example onenotify config. Copy to /etc/onenotify/config.yaml and adjust.
+# Check it with:  onenotify validate -c /etc/onenotify/config.yaml
+#
+# The config holds or points to secrets: keep it readable by its owner only
+# (chmod 600) and pass tokens and passwords as ${VAR}.
+
+# The host name every notification starts with: "[web-01] FAIL main/api-health".
+# Default: the system host name.
+# host: web-01
+
+log:
+  level: info            # debug | info | warn | error; --log-level overrides
+  dir: /var/log/onenotify
+  format: text           # text | json
+  rotate:                # used by "onenotify logrotate"
+    max_size: 10MB
+    keep: 5
+    max_age: 30d
+    compress: true
+
+paths:
+  modules: /usr/lib/onenotify/modules
+  spool: /var/lib/onenotify/spool      # one queue directory per channel
+  failed: /var/lib/onenotify/failed    # messages that expired or were rejected
+
+# Where events come from. The default is the event queue of a onecheck run by
+# the same user, so this block is only needed for another location.
+sources:
+  - type: onecheck
+    path: /var/lib/onecheck/events
+
+# More channel files. Relative patterns are resolved against this file's directory.
+include:
+  - conf.d/*.yaml
+
+queue:
+  ttl: 24h               # delivery deadline of a message sent with "onenotify send"
+  failed_ttl: 7d         # "onenotify logrotate" removes failed messages older than this
+
+limits:
+  text: 64KB             # a longer text given to "onenotify send" is cut
+
+run:
+  parallel: 4            # channels served at the same time
+
+defaults:                # for channels that do not set these themselves
+  timeout: 30s
+
+modules:
+  repos:                 # searched by "onenotify module search" without arguments
+    - alekzonder/onenotify
+
+# Every event and every "onenotify send" goes to every enabled channel.
+channels:
+  - name: ops-telegram
+    module: telegram
+    timeout: 10s
+    params:
+      token: "${TELEGRAM_TOKEN}"       # from @BotFather
+      chat_id: "-1001234567890"
+      silent_ok: true                  # "recovered" arrives without a sound
+
+  - name: admin-mail
+    module: mail
+    params:
+      host: smtp.example.com
+      port: 587
+      tls: starttls                    # starttls | tls | none
+      username: alerts@example.com
+      password: "${SMTP_PASSWORD}"
+      from: "Alerts <alerts@example.com>"
+      to:
+        - admin@example.com
+
+  - name: phone
+    module: ntfy
+    enabled: true
+    params:
+      url: https://ntfy.sh
+      topic: my-server-alerts
+      token: "${NTFY_TOKEN}"

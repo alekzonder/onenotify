@@ -1,0 +1,7 @@
+# An include file holds only "channels". Channel names are unique across all files.
+channels:
+  - name: team-ntfy
+    module: ntfy
+    enabled: false                     # kept in the config, not used
+    params:
+      topic: team-alerts
