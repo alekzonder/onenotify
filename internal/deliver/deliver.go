@@ -1,7 +1,6 @@
 package deliver
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -194,15 +193,13 @@ func (r *run) serve(name string) channelResult {
 
 	var sender *sender
 	stopped := !served
+	// unusable is why the channel cannot be used at all; it is reported
+	// with the first message that has to wait because of it.
+	unusable := ""
 	if served {
 		if sender, err = r.sender(ch); err != nil {
-			// The channel cannot be used at all: its messages wait.
-			stopped = true
-			first, _ := r.q.Load(name, files[0])
-			res.records = append(res.records, Record{Channel: name, Module: ch.Module, ID: first.ID,
-				Outcome: Waiting, Error: err.Error()})
-			r.channelFailed(name, err.Error(), 0)
-		} else if st := r.q.Status(name); st != nil && st.RetryAt != nil && r.now().Before(*st.RetryAt) {
+			stopped, unusable = true, err.Error()
+		} else if st := r.q.Status(name); st != nil && r.mustWait(st) {
 			stopped = true
 			r.log.Info("channel asked to wait, not sending yet", "channel", name, "retry_at", st.RetryAt.UTC())
 		}
@@ -214,16 +211,22 @@ func (r *run) serve(name string) channelResult {
 		}
 		msg, err := r.q.Load(name, file)
 		if err != nil {
-			r.fail(&res, name, moduleOf(ch), file, strings.TrimSuffix(file, ".json"), "unreadable queue file: "+err.Error())
+			stopped = !r.fail(&res, name, moduleOf(ch), file, strings.TrimSuffix(file, ".json"), "unreadable queue file: "+err.Error()) || stopped
 			continue
 		}
 		if !r.now().Before(msg.ExpiresAt) {
-			r.fail(&res, name, moduleOf(ch), file, msg.ID, "expired at "+msg.ExpiresAt.UTC().Format(time.RFC3339))
+			stopped = !r.fail(&res, name, moduleOf(ch), file, msg.ID, "expired at "+msg.ExpiresAt.UTC().Format(time.RFC3339)) || stopped
 			continue
 		}
 		if stopped {
 			if served {
 				res.waiting++
+			}
+			if unusable != "" {
+				res.records = append(res.records, Record{Channel: name, Module: ch.Module, ID: msg.ID,
+					Outcome: Waiting, Error: unusable})
+				r.channelFailed(name, unusable, 0)
+				unusable = ""
 			}
 			continue
 		}
@@ -237,7 +240,8 @@ func (r *run) serve(name string) channelResult {
 			}
 			r.channelWorks(name)
 		case Failed:
-			r.fail(&res, name, ch.Module, file, msg.ID, rec.Error)
+			// A message that cannot be put away must not be overtaken.
+			stopped = !r.fail(&res, name, ch.Module, file, msg.ID, rec.Error)
 			continue
 		case Waiting:
 			stopped = true
@@ -255,15 +259,32 @@ func moduleOf(ch *config.Channel) string {
 	return ch.Module
 }
 
-// fail moves a message to the failed store and reports it.
-func (r *run) fail(res *channelResult, channel, mod, file, id, reason string) {
+// maxRetryAfter bounds how long a module can keep a channel closed. Without
+// it one wrong answer, or a clock that was ahead for a moment, would close a
+// channel until someone deletes its status file.
+const maxRetryAfter = 24 * time.Hour
+
+// mustWait reports whether a failing channel asked not to be used yet.
+func (r *run) mustWait(st *queue.Status) bool {
+	if st.RetryAt == nil {
+		return false
+	}
+	left := st.RetryAt.Sub(r.now())
+	return left > 0 && left <= maxRetryAfter
+}
+
+// fail moves a message to the failed store and reports it. It returns false
+// when the message could not be moved: it is then still in the queue, and
+// the channel must stop so that nothing overtakes it.
+func (r *run) fail(res *channelResult, channel, mod, file, id, reason string) bool {
 	if err := r.q.Fail(channel, file, reason, r.now()); err != nil {
 		res.err = fmt.Errorf("cannot move message %s of channel %s to the failed store: %w", id, channel, err)
-		return
+		return false
 	}
 	r.log.Warn("message will not be delivered; moved to the failed store",
 		"channel", channel, "id", id, "reason", reason)
 	res.records = append(res.records, Record{Channel: channel, Module: mod, ID: id, Outcome: Failed, Error: reason})
+	return true
 }
 
 // channelFailed remembers that a channel could not deliver. The first failure
@@ -286,7 +307,7 @@ func (r *run) channelFailed(channel, reason string, retryAfter time.Duration) {
 	st.LastError = reason
 	st.RetryAt = nil
 	if retryAfter > 0 {
-		at := now.Add(retryAfter)
+		at := now.Add(min(retryAfter, maxRetryAfter))
 		st.RetryAt = &at
 	}
 	if err := r.q.SetStatus(channel, *st); err != nil {
@@ -342,16 +363,16 @@ func (r *run) sender(ch *config.Channel) (*sender, error) {
 
 func (s *sender) send(r *run, msg module.Message) Record {
 	rec := Record{Channel: s.ch.Name, Module: s.ch.Module, ID: msg.ID}
-	var stderr bytes.Buffer
+	stderr := &tail{max: 16 << 10}
 	start := time.Now()
 	// The request is not logged: its params hold the channel's secrets.
 	r.log.Debug("sending", "channel", s.ch.Name, "module", s.ch.Module, "id", msg.ID,
 		"params", paramNames(s.ch.Params), "timeout", s.ch.Timeout)
 	resp, err := modules.Send(r.ctx, s.info, module.Request{Channel: s.ch.Name, Params: s.params, Message: msg},
-		s.ch.Timeout, &stderr)
+		s.ch.Timeout, stderr)
 	rec.DurationMS = time.Since(start).Milliseconds()
-	if stderr.Len() > 0 {
-		r.log.Debug("module stderr", "channel", s.ch.Name, "module", s.ch.Module, "output", strings.TrimSpace(stderr.String()))
+	if len(stderr.buf) > 0 {
+		r.log.Debug("module stderr", "channel", s.ch.Name, "module", s.ch.Module, "output", strings.TrimSpace(string(stderr.buf)))
 	}
 	switch {
 	case err != nil:
@@ -367,6 +388,20 @@ func (s *sender) send(r *run, msg module.Message) Record {
 		r.channelFailed(s.ch.Name, rec.Error, time.Duration(resp.Error.RetryAfterMS)*time.Millisecond)
 	}
 	return rec
+}
+
+// tail keeps the first max bytes written to it and drops the rest, so that a
+// module cannot fill the memory through its stderr.
+type tail struct {
+	buf []byte
+	max int
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	if room := t.max - len(t.buf); room > 0 {
+		t.buf = append(t.buf, p[:min(room, len(p))]...)
+	}
+	return len(p), nil
 }
 
 // paramNames is what may be logged about a channel's params: their names.

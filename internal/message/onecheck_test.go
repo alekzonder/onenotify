@@ -279,3 +279,23 @@ func TestTitleIsAlwaysOneLine(t *testing.T) {
 		t.Errorf("title = %q", m.Title)
 	}
 }
+
+func TestHostileIDIsOneLine(t *testing.T) {
+	m, err := FromOnecheck(ev(map[string]any{"id": "20261123T100200Z-x\nSENT a forged\x1b[31m"}, nil), "h", time.Hour, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(m.ID, "\n\x1b") {
+		t.Errorf("id = %q", m.ID)
+	}
+	if _, err := FromOnecheck(ev(map[string]any{"id": "\n\t "}, nil), "h", time.Hour, now); err == nil {
+		t.Error("an id of white space only must be rejected")
+	}
+}
+
+func TestEventWithADateThatCannotBeStoredIsRejected(t *testing.T) {
+	_, err := FromOnecheck(ev(map[string]any{"at": "9999-12-31T23:59:59Z", "expires_at": drop}, nil), "h", 48*time.Hour, now)
+	if err == nil {
+		t.Error("want an error: created_at + ttl is past year 9999")
+	}
+}

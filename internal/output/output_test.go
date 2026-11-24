@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/alekzonder/onenotify/internal/deliver"
@@ -82,5 +83,18 @@ func TestExitCodeAndSummary(t *testing.T) {
 		if got := Summary(&c.r); got != c.summary {
 			t.Errorf("%+v: %q", c.r, got)
 		}
+	}
+}
+
+func TestControlCharactersDoNotReachTheTerminal(t *testing.T) {
+	var buf bytes.Buffer
+	r := &deliver.Report{Waiting: 1, Records: []deliver.Record{{Channel: "a", Module: "m", Outcome: deliver.Waiting,
+		ID: "id\nSENT    a  forged", Error: "bad \x1b[31mred\r\nnext\xff"}}}
+	if err := Write(&buf, "text", r); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Count(out, "\n") != 4 || strings.ContainsAny(out, "\x1b\r") || strings.Contains(out, "\nSENT") {
+		t.Errorf("out = %q", out)
 	}
 }

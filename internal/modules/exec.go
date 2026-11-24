@@ -69,6 +69,11 @@ func run(ctx context.Context, path, arg string, stdin []byte, stdout, stderr io.
 	case runCtx.Err() != nil:
 		return timedOut, runCtx.Err()
 	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// The module exited with 0 but something it started still holds
+		// its stdout. Its answer is complete: use it.
+		err = nil
+	}
 	return finished, err
 }
 

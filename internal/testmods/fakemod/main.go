@@ -4,7 +4,8 @@
 // params:
 //
 //	mode            ok (default), temporary, permanent, retry_after, exit3,
-//	                garbage, silent, hang, ok_then_exit3, ok_then_hang, huge
+//	                garbage, silent, hang, ok_then_exit3, ok_then_hang, huge,
+//	                ok_with_child, no_reason
 //	only            apply mode only to messages whose id contains this text;
 //	                other messages are delivered
 //	record          file to append every received request to, one JSON per line
@@ -132,6 +133,15 @@ func misbehave(p params) error {
 	case "ok_then_hang":
 		fmt.Println(`{"delivered":true,"error":null}`)
 		time.Sleep(60 * time.Second)
+	case "ok_with_child":
+		// Answer and exit, leaving a child that holds stdout open.
+		child := exec.Command("sleep", "5")
+		child.Stdout = os.Stdout
+		if err := child.Start(); err != nil {
+			panic(err)
+		}
+		fmt.Println(`{"delivered":true,"error":null}`)
+		os.Exit(0)
 	case "no_reason":
 		fmt.Println(`{"delivered":false,"error":null}`)
 		os.Exit(0)

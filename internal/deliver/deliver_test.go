@@ -644,3 +644,92 @@ func TestManyChannelsInParallel(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageThatCannotBePutAwayStopsItsChannel(t *testing.T) {
+	e := newEnv(t)
+	bad := e.event(1, "fail")
+	e.event(2, "fail")
+	// The failed store of channel "a" cannot be created: a file is in the way.
+	if err := os.MkdirAll(e.path("failed"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(e.path("failed", "a"), []byte("x"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := e.runOpt(Options{}, e.channel("a", "mode: permanent", "only: rule1"), e.channel("b"))
+	if err == nil || !strings.Contains(err.Error(), "failed store") {
+		t.Fatalf("err = %v", err)
+	}
+	if e.receivedIDs("a") != bad {
+		t.Errorf("nothing may overtake a message that is stuck; a received %q", e.receivedIDs("a"))
+	}
+	if len(e.files("spool", "a")) != 2 || len(e.received("b")) != 2 || rep.Sent != 2 {
+		t.Errorf("queue a = %v, b received %d, report %+v", e.files("spool", "a"), len(e.received("b")), rep)
+	}
+}
+
+func TestRetryAfterIsCapped(t *testing.T) {
+	e := newEnv(t)
+	e.event(1, "fail")
+	e.run(e.channel("a", "mode: retry_after", "retry_after_ms: 9000000000000"))
+	cfg := e.load(e.channel("a"))
+	st := e.queue(cfg).Status("a")
+	if st == nil || st.RetryAt == nil || !st.RetryAt.Equal(t0.Add(24*time.Hour)) {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestAStoredRetryTimeFarInTheFutureIsIgnored(t *testing.T) {
+	e := newEnv(t)
+	e.event(1, "fail")
+	cfg := e.load(e.channel("a"))
+	far := t0.Add(300 * 24 * time.Hour) // written while the clock was wrong
+	if err := e.queue(cfg).SetStatus("a", queue.Status{FailingSince: t0, Consecutive: 1, RetryAt: &far}); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.run(e.channel("a")); rep.Sent != 1 {
+		t.Errorf("report = %+v", rep)
+	}
+}
+
+func TestUnusableChannelReportsTheFirstMessageThatWaits(t *testing.T) {
+	e := newEnv(t)
+	cfg := e.load("  - {name: a, module: absent}\n")
+	q := e.queue(cfg)
+	old := message.NewSend("web-01", "old", "", "info", nil, t0.Add(-2*time.Hour), time.Hour)
+	fresh := message.NewSend("web-01", "fresh", "", "info", nil, t0, time.Hour)
+	for _, m := range []message.Message{old, fresh} {
+		if err := q.Enqueue("a", m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rep := e.run("  - {name: a, module: absent}\n")
+	if outcomes(rep) != "a:failed a:waiting" || rep.Records[0].ID != old.ID || rep.Records[1].ID != fresh.ID {
+		t.Errorf("records = %+v", rep.Records)
+	}
+}
+
+func TestEventWithAVeryLongIDIsDelivered(t *testing.T) {
+	e := newEnv(t)
+	id := "20261123T100000Z-" + strings.Repeat("r", 300) + "-fail"
+	data := `{"id":"` + id + `","rule":"r","transition":"fail","at":"2026-11-23T10:00:00Z","expires_at":"2026-11-24T10:00:00Z"}`
+	if err := os.WriteFile(e.path("events", "long.json"), []byte(data), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.run(e.channel("a")); rep.Sent != 1 || e.receivedIDs("a") != id {
+		t.Errorf("report = %+v", rep)
+	}
+}
+
+func TestEventThatCannotBeStoredDoesNotBlockTheOthers(t *testing.T) {
+	e := newEnv(t)
+	data := `{"id":"20261123T095900Z-far","rule":"r","transition":"fail","at":"9999-12-31T23:59:59Z"}`
+	if err := os.WriteFile(e.path("events", "20261123T095900Z-far.json"), []byte(data), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	good := e.event(1, "fail")
+	rep := e.run(e.channel("a"))
+	if rep.Sent != 1 || e.receivedIDs("a") != good || len(e.files("failed", queue.Unreadable)) != 1 {
+		t.Errorf("report = %+v, received %q", rep, e.receivedIDs("a"))
+	}
+}

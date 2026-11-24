@@ -255,3 +255,14 @@ func TestModuleStderrIsPassedOn(t *testing.T) {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 }
+
+func TestAnswerIsUsedWhenAChildKeepsStdoutOpen(t *testing.T) {
+	start := time.Now()
+	resp, err := send(t, map[string]any{"mode": "ok_with_child"}, 10*time.Second)
+	if err != nil || !resp.Delivered {
+		t.Errorf("resp=%+v err=%v", resp, err)
+	}
+	if elapsed := time.Since(start); elapsed > 4*time.Second {
+		t.Errorf("Send waited %v for the child", elapsed)
+	}
+}

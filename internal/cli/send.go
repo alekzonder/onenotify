@@ -57,7 +57,9 @@ Without --channel the message goes to every enabled channel.
 Exit codes:
   0  delivered to every chosen channel (with --queue-only: queued)
   1  queued, but not delivered to at least one channel yet
-  2  nothing was queued: bad arguments, unknown channel, no enabled channels`
+  2  onenotify could not do its job. Bad arguments, an unknown channel or no
+     enabled channels: nothing was queued. A failure after that says "the
+     message is queued" when it is: do not send it again.`
 
 const sendExample = `  onenotify send --title "backup finished" --text "42 GB in 13m"
   onenotify send --title "backup failed" --text-file /var/log/backup.log --level error
@@ -125,9 +127,13 @@ func (a *app) send(ctx context.Context, o *sendOptions, textGiven bool) error {
 		return err
 	}
 	msg := message.NewSend(cfg.Host, o.title, text, o.level, o.tags, time.Now(), time.Duration(cfg.Queue.TTL))
-	for _, name := range targets {
+	for i, name := range targets {
 		if err := q.Enqueue(name, msg); err != nil {
-			return fmt.Errorf("cannot queue the message for channel %s: %w", name, err)
+			err = fmt.Errorf("cannot queue the message for channel %s: %w", name, err)
+			if i > 0 {
+				err = fmt.Errorf("the message is queued for %s, but: %w", strings.Join(targets[:i], ", "), err)
+			}
+			return err
 		}
 	}
 	log.Info("message queued", "id", msg.ID, "level", msg.Level, "title", msg.Title, "channels", strings.Join(targets, ","))
@@ -144,10 +150,13 @@ func (a *app) send(ctx context.Context, o *sendOptions, textGiven bool) error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("the message is queued, but it was not delivered now: %w", err)
 	}
 	defer unlock()
-	return a.deliver(ctx, cfg, q, log, o.output, targets)
+	if err := a.deliver(ctx, cfg, q, log, o.output, targets); err != nil {
+		return fmt.Errorf("the message is queued, but the run failed: %w", err)
+	}
+	return nil
 }
 
 // sendTargets is the list of channels a message is queued for.

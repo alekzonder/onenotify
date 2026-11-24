@@ -287,3 +287,24 @@ func TestLocate(t *testing.T) {
 		t.Error("a missing explicit config must be an error")
 	}
 }
+
+func TestBrokenVariableReferenceDoesNotQuoteTheValue(t *testing.T) {
+	cfg := mustLoad(t, "channels:\n  - {name: a, module: ntfy, params: {token: \"SECRETVALUE${oops\"}}\n")
+	err := cfg.Channel("a").Err
+	if err == nil || strings.Contains(err.Error(), "SECRETVALUE") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestSpoolAndFailedMustBeApart(t *testing.T) {
+	for _, paths := range []string{
+		"{spool: q, failed: q}", "{spool: q, failed: q/failed}", "{spool: q/spool, failed: q}", "{spool: q/, failed: ./q}",
+	} {
+		if _, err := load(t, "paths: "+paths+"\n"); err == nil || !strings.Contains(err.Error(), "different directories") {
+			t.Errorf("%s: %v", paths, err)
+		}
+	}
+	if _, err := load(t, "paths: {spool: q, failed: q-failed}\n"); err != nil {
+		t.Errorf("siblings with a common prefix: %v", err)
+	}
+}

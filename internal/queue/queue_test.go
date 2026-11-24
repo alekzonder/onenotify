@@ -313,3 +313,28 @@ func TestEnqueueFailsWhenTheChannelDirCannotBeMade(t *testing.T) {
 		t.Error("want an error")
 	}
 }
+
+func TestLongIDsGetShortDistinctNames(t *testing.T) {
+	q, _ := open(t)
+	long := strings.Repeat("x", 400)
+	a, b := FileName(long+"a"), FileName(long+"b")
+	if len(a) > 200 || a == b || !strings.HasSuffix(a, ".json") {
+		t.Errorf("names: %d bytes, equal=%v", len(a), a == b)
+	}
+	if err := q.Enqueue("ops", msg(long+"a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Enqueue("ops", msg(long+"b")); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := q.List("ops")
+	if len(files) != 2 {
+		t.Fatalf("files = %d", len(files))
+	}
+	if err := q.Fail("ops", files[0], "expired", now); err != nil {
+		t.Errorf("Fail: %v", err)
+	}
+	if err := q.FailRaw(Unreadable, long+".json", []byte("x")); err != nil {
+		t.Errorf("FailRaw: %v", err)
+	}
+}

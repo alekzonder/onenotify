@@ -143,6 +143,9 @@ func (c *Config) validate() error {
 	case c.Limits.Text < 1:
 		return errors.New("limits.text must be positive")
 	}
+	if within(c.Paths.Spool, c.Paths.Failed) || within(c.Paths.Failed, c.Paths.Spool) {
+		return errors.New("paths.spool and paths.failed must be different directories, neither inside the other")
+	}
 	for i, s := range c.Sources {
 		if s.Type != SourceOnecheck {
 			return fmt.Errorf("sources[%d].type: %q is not supported (known: %s)", i, s.Type, SourceOnecheck)
@@ -152,6 +155,12 @@ func (c *Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// within reports whether path is dir or lies inside it.
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // resolvePaths makes relative directories relative to the config file.
@@ -318,7 +327,8 @@ func expandString(s string) (string, error) {
 		case strings.HasPrefix(rest, "${"):
 			end := strings.IndexByte(rest, '}')
 			if end < 0 {
-				return "", fmt.Errorf("unterminated ${ in %q", s)
+				// The value is not quoted: params hold secrets.
+				return "", errors.New("a param value has a \"${\" without the closing \"}\"; write \"$${\" for a literal \"${\"")
 			}
 			name := rest[2:end]
 			val, ok := os.LookupEnv(name)

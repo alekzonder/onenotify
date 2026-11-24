@@ -60,7 +60,7 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 		return Message{}, fmt.Errorf("not a onecheck event: %w", err)
 	}
 	switch {
-	case ev.ID == "":
+	case oneLine(ev.ID) == "":
 		return Message{}, errors.New(`not a onecheck event: no "id"`)
 	case ev.Rule == "":
 		return Message{}, errors.New(`not a onecheck event: no "rule"`)
@@ -70,7 +70,7 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 
 	m := Message{
 		Version:   Version,
-		ID:        ev.ID,
+		ID:        oneLine(ev.ID),
 		Source:    SourceOnecheck,
 		Host:      host,
 		Tags:      []string{},
@@ -123,6 +123,11 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 		lines = append(lines, failureLines(&ev)...)
 	}
 	m.Text = strings.Join(lines, "\n")
+	// A message that cannot be written to a queue file is not a usable
+	// event either: a date JSON cannot hold, for one.
+	if _, err := json.Marshal(m); err != nil {
+		return Message{}, fmt.Errorf("not a usable onecheck event: %w", err)
+	}
 	return m, nil
 }
 

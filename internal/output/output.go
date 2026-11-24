@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
 
 	"github.com/alekzonder/onenotify/internal/deliver"
 )
@@ -58,11 +60,11 @@ func Write(w io.Writer, format string, r *deliver.Report) error {
 		if rec.Outcome != deliver.Failed || rec.DurationMS > 0 {
 			detail = fmt.Sprintf("%s, %s", rec.Module, duration(rec.DurationMS))
 		}
-		if _, err := fmt.Fprintf(w, "%-7s %-*s  %s  (%s)\n", labels[rec.Outcome], width, rec.Channel, rec.ID, detail); err != nil {
+		if _, err := fmt.Fprintf(w, "%-7s %-*s  %s  (%s)\n", labels[rec.Outcome], width, rec.Channel, printable(rec.ID), detail); err != nil {
 			return err
 		}
 		if rec.Error != "" {
-			if _, err := fmt.Fprintf(w, "        %s\n", rec.Error); err != nil {
+			if _, err := fmt.Fprintf(w, "        %s\n", printable(rec.Error)); err != nil {
 				return err
 			}
 		}
@@ -72,6 +74,17 @@ func Write(w io.Writer, format string, r *deliver.Report) error {
 	}
 	_, err := fmt.Fprintln(w, Summary(r))
 	return err
+}
+
+// printable keeps text that came from outside (an event, a provider's
+// answer) from breaking the line it is printed on or driving the terminal.
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, strings.ToValidUTF8(s, "?"))
 }
 
 func duration(ms int64) string {

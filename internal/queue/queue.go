@@ -11,6 +11,8 @@
 package queue
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,13 +51,39 @@ const (
 
 var unsafeChars = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 
+// maxName keeps a file name, with the suffix of a temporary file added,
+// under the 255 bytes most filesystems allow.
+const maxName = 180
+
 // FileName maps a message id to a file name that cannot leave its directory.
+// An id too long for a file name is cut and gets a hash of the whole id, so
+// that different ids still give different names.
 func FileName(id string) string {
-	name := unsafeChars.ReplaceAllString(id, "_")
+	return clip(unsafeChars.ReplaceAllString(id, "_")) + ".json"
+}
+
+func clip(name string) string {
 	if name == "" || name[0] == '.' {
 		name = "_" + name
 	}
-	return name + ".json"
+	if len(name) > maxName {
+		sum := sha256.Sum256([]byte(name))
+		name = name[:maxName] + "-" + hex.EncodeToString(sum[:6])
+	}
+	return name
+}
+
+// mkdir creates a directory of the spool or the failed store. A directory
+// that is new is made durable in its parent, so that a message written into
+// it survives a power loss.
+func mkdir(dir string) error {
+	if _, err := os.Stat(dir); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
+		return err
+	}
+	return fsutil.SyncDir(filepath.Dir(dir))
 }
 
 // Queue gives access to the spool and the failed store of one config.
@@ -143,7 +171,7 @@ func (q *Queue) Enqueue(channel string, m message.Message) error {
 		return err
 	}
 	dir := q.channelDir(channel)
-	if err := os.MkdirAll(dir, dirPerm); err != nil {
+	if err := mkdir(dir); err != nil {
 		return err
 	}
 	return fsutil.WriteFileDurable(filepath.Join(dir, FileName(m.ID)), append(data, '\n'), filePerm)
@@ -251,7 +279,7 @@ func (q *Queue) FailRaw(dir, file string, data []byte) error {
 
 func (q *Queue) writeFailed(dir, file string, data []byte) error {
 	target := filepath.Join(q.failed, dir)
-	if err := os.MkdirAll(target, dirPerm); err != nil {
+	if err := mkdir(target); err != nil {
 		return err
 	}
 	return fsutil.WriteFileDurable(filepath.Join(target, safeFile(file)), data, filePerm)
@@ -261,10 +289,11 @@ func (q *Queue) writeFailed(dir, file string, data []byte) error {
 // directory it is written to.
 func safeFile(name string) string {
 	name = unsafeChars.ReplaceAllString(filepath.Base(name), "_")
-	if name == "" || name[0] == '.' {
-		name = "_" + name
+	ext := filepath.Ext(name)
+	if len(ext) > 16 {
+		ext = ""
 	}
-	return name
+	return clip(strings.TrimSuffix(name, ext)) + ext
 }
 
 // FailedCount is the number of files in the failed store.
