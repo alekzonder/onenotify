@@ -25,15 +25,18 @@ const textTime = "2006-01-02 15:04:05 UTC"
 // event is the part of a onecheck event onenotify reads. Unknown keys are
 // ignored, so newer versions of onecheck keep working.
 type event struct {
-	ID         string         `json:"id"`
-	Config     string         `json:"config"`
-	Rule       string         `json:"rule"`
-	Transition string         `json:"transition"`
-	At         *time.Time     `json:"at"`
-	ExpiresAt  *time.Time     `json:"expires_at"`
-	Params     map[string]any `json:"params"`
-	Redacted   bool           `json:"redacted"`
-	Result     *struct {
+	ID         string     `json:"id"`
+	Config     string     `json:"config"`
+	Rule       string     `json:"rule"`
+	Transition string     `json:"transition"`
+	At         *time.Time `json:"at"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	// Since is when the state the event reports began: for a reminder, the
+	// time of the fail event.
+	Since    *time.Time     `json:"since"`
+	Params   map[string]any `json:"params"`
+	Redacted bool           `json:"redacted"`
+	Result   *struct {
 		Module      string   `json:"module"`
 		Tags        []string `json:"tags"`
 		Status      string   `json:"status"`
@@ -49,9 +52,9 @@ type event struct {
 // An error means the content is not a usable event.
 //
 // What goes into the text is fixed: module, rule params as onecheck wrote
-// them, tags, time and, for a failure only, the error or the failed
-// conditions. Saved output never does. An event marked "redacted" gives only
-// module, tags and time.
+// them, tags, time and, for a failure and a reminder of one, the error or
+// the failed conditions. A reminder also says since when the rule fails. An
+// event marked "redacted" gives only module, tags and times.
 func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (Message, error) {
 	var ev event
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -84,15 +87,8 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 		m.ExpiresAt = ev.ExpiresAt.UTC()
 	}
 
-	word := strings.ToUpper(ev.Transition)
-	switch ev.Transition {
-	case "fail":
-		m.Level = module.LevelError
-	case "recovered":
-		m.Level = module.LevelOK
-	default:
-		m.Level = module.LevelInfo
-	}
+	word, level := headline(ev.Transition)
+	m.Level = level
 	name := ev.Rule
 	if ev.Config != "" {
 		name = ev.Config + "/" + ev.Rule
@@ -119,7 +115,10 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 	if ev.At != nil && !ev.At.IsZero() {
 		lines = append(lines, "at: "+ev.At.UTC().Format(textTime))
 	}
-	if ev.Transition == "fail" && !ev.Redacted {
+	if ev.Transition == transitionReminder && ev.Since != nil && !ev.Since.IsZero() {
+		lines = append(lines, "failing since: "+ev.Since.UTC().Format(textTime))
+	}
+	if ev.failing() && !ev.Redacted {
 		lines = append(lines, failureLines(&ev)...)
 	}
 	m.Text = strings.Join(lines, "\n")
@@ -129,6 +128,33 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 		return Message{}, fmt.Errorf("not a usable onecheck event: %w", err)
 	}
 	return m, nil
+}
+
+// Transitions of a onecheck event onenotify knows.
+const (
+	transitionFail      = "fail"
+	transitionReminder  = "reminder"
+	transitionRecovered = "recovered"
+)
+
+// headline gives the word a transition puts into the title and the level of
+// its message. A transition onenotify does not know is passed on as it is.
+func headline(transition string) (word, level string) {
+	switch transition {
+	case transitionFail:
+		return "FAIL", module.LevelError
+	case transitionReminder:
+		return "STILL FAILING", module.LevelError
+	case transitionRecovered:
+		return "RECOVERED", module.LevelOK
+	}
+	return strings.ToUpper(transition), module.LevelInfo
+}
+
+// failing reports whether the event tells of a rule that fails: the failure
+// itself or a reminder of it. Only such an event explains itself.
+func (ev *event) failing() bool {
+	return ev.Transition == transitionFail || ev.Transition == transitionReminder
 }
 
 // failureLines says why the rule failed: the error of a check that could not

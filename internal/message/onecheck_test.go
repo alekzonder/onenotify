@@ -24,6 +24,7 @@ func ev(top map[string]any, result map[string]any) []byte {
 		"id": "20261123T100200Z-main-api-health-fail", "config": "main", "rule": "api-health",
 		"transition": "fail", "from": "pass", "to": "fail",
 		"at": "2026-11-23T10:02:00Z", "expires_at": "2026-11-24T10:02:00Z",
+		"since": "2026-11-23T10:02:00Z",
 		"params": map[string]any{
 			"url":     "https://example.com/health",
 			"headers": map[string]any{"Authorization": "Bearer ${API_TOKEN}"},
@@ -46,6 +47,19 @@ func ev(top map[string]any, result map[string]any) []byte {
 }
 
 const drop = "\x00drop"
+
+// reminder returns the top-level keys of a reminder event written an hour
+// after the base fail event, with more keys overridden.
+func reminder(more map[string]any) map[string]any {
+	top := map[string]any{
+		"id": "20261123T110215Z-main-api-health-reminder", "transition": "reminder", "from": "fail",
+		"at": "2026-11-23T11:02:15Z", "since": "2026-11-23T10:02:00Z",
+	}
+	for k, v := range more {
+		top[k] = v
+	}
+	return top
+}
 
 func TestFromOnecheckText(t *testing.T) {
 	long := strings.Repeat("я", 500)
@@ -98,7 +112,7 @@ func TestFromOnecheckText(t *testing.T) {
 		{
 			name: "recovered has no failure lines",
 			top: map[string]any{"id": "20261123T101400Z-main-api-health-recovered", "transition": "recovered",
-				"at": "2026-11-23T10:14:00Z"},
+				"at": "2026-11-23T10:14:00Z", "since": "2026-11-23T10:14:00Z"},
 			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "consecutive": 2},
 			title:  "[web-01] RECOVERED main/api-health", level: "ok",
 			text: "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
@@ -177,6 +191,44 @@ func TestFromOnecheckText(t *testing.T) {
 				"n: 1.5\n" +
 				"none: null\n" +
 				"at: 2026-11-23 10:02:00 UTC",
+		},
+		{
+			name:   "reminder is a failure that goes on",
+			top:    reminder(nil),
+			result: map[string]any{"consecutive": 63},
+			title:  "[web-01] STILL FAILING main/api-health", level: "error",
+			text: "module: http\nheaders.Authorization: Bearer ${API_TOKEN}\nurl: https://example.com/health\n" +
+				"tags: api, web\nat: 2026-11-23 11:02:15 UTC\nfailing since: 2026-11-23 10:02:00 UTC\n" +
+				"failed 63 runs in a row:\n- status: expected equals 200, got 503",
+		},
+		{
+			name:   "reminder of a check that cannot run",
+			top:    reminder(map[string]any{"params": nil}),
+			result: map[string]any{"status": "error", "error": "timed out", "failures": []any{}},
+			title:  "[web-01] STILL FAILING main/api-health", level: "error",
+			text: "module: http\ntags: api, web\nat: 2026-11-23 11:02:15 UTC\n" +
+				"failing since: 2026-11-23 10:02:00 UTC\nerror: timed out",
+		},
+		{
+			name:  "redacted reminder keeps the time the problem began",
+			top:   reminder(map[string]any{"redacted": true}),
+			title: "[web-01] STILL FAILING main/api-health", level: "error",
+			text: "module: http\ntags: api, web\nat: 2026-11-23 11:02:15 UTC\n" +
+				"failing since: 2026-11-23 10:02:00 UTC",
+		},
+		{
+			name:   "reminder without since",
+			top:    reminder(map[string]any{"since": drop, "params": nil}),
+			result: map[string]any{"tags": nil},
+			title:  "[web-01] STILL FAILING main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 11:02:15 UTC\n" +
+				"failed 3 runs in a row:\n- status: expected equals 200, got 503",
+		},
+		{
+			name:  "reminder without a result",
+			top:   reminder(map[string]any{"result": nil, "params": nil}),
+			title: "[web-01] STILL FAILING main/api-health", level: "error",
+			text: "at: 2026-11-23 11:02:15 UTC\nfailing since: 2026-11-23 10:02:00 UTC",
 		},
 		{
 			name:   "unknown transition",
