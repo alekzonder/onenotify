@@ -1,4 +1,6 @@
-# Sending your own messages
+---
+title: Sending your own messages
+---
 
 `onenotify send` sends a message of your own through the channels of the
 config. It is how a backup script, a deploy script or a cron job tells you

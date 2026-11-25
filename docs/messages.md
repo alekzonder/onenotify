@@ -1,4 +1,6 @@
-# Messages
+---
+title: Messages
+---
 
 Everything onenotify delivers is a **message**: a title, a text, a level and a
 few fields around them. A message is built in one of two ways: from a onecheck

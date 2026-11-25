@@ -26,6 +26,10 @@ Rules for anyone (human or AI agent) changing this repository.
   route, `[Messages](/messages#anchor)`, never by `.md` path; `make docs-build`
   must pass when `docs/` changes. See "Documentation site" in
   `docs/development.md`.
+- A page's title goes into its front matter (`title: Messages`), never as a
+  `# Messages` heading: Blume prints the title itself, so a `# ` heading
+  shows it twice. Sections start at `##`. `make docs-build` fails on a `# `
+  heading outside a code block.
 
 ## Repository map
 
