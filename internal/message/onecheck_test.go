@@ -71,6 +71,10 @@ func TestFromOnecheckText(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		manyFailures = append(manyFailures, map[string]any{"message": fmt.Sprintf("f%d", i)})
 	}
+	var manyFields []map[string]any
+	for i := 0; i < 12; i++ {
+		manyFields = append(manyFields, map[string]any{"path": fmt.Sprintf("f%d", i), "operator": "equals", "actual": i})
+	}
 	var manyParamLines []string
 	for i := 0; i < 20; i++ {
 		manyParamLines = append(manyParamLines, fmt.Sprintf("  p%02d: %d", i, i))
@@ -171,6 +175,83 @@ func TestFromOnecheckText(t *testing.T) {
 			title:  "[web-01] FAIL main/api-health", level: "error",
 			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
 				"- f0\n- f1\n- f2\n- f3\n- f4\n- f5\n- f6\n- f7\n- f8\n- f9\n… and 2 more",
+		},
+		{
+			name: "failed fields instead of the message",
+			top:  map[string]any{"params": nil},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{{
+				"path": `containers.#(state=="running")#.2`, "operator": "any",
+				"message": `containers.#(state=="running")#.2: expected any [...], got {"name":"smoke-tls-proxy"}`,
+				"fields": []map[string]any{{
+					"path": `containers.#(state=="running")#.2.name`, "operator": "in", "actual": "smoke-tls-proxy",
+				}},
+			}}},
+			title: "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
+				`- containers.#(state=="running")#.2.name = "smoke-tls-proxy"`,
+		},
+		{
+			name: "no fields falls back to the message",
+			top:  map[string]any{"params": nil},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{
+				{"message": "old onecheck"},
+				{"message": "empty fields", "fields": []any{}},
+				{"message": "unusable fields", "fields": []map[string]any{{"path": " ", "actual": 1}}},
+			}},
+			title: "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
+				"- old onecheck\n- empty fields\n- unusable fields",
+		},
+		{
+			name: "missing fields, json paths and value kinds",
+			top:  map[string]any{"params": nil},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{{
+				"message": "long",
+				"fields": []map[string]any{
+					{"path": "a.b", "operator": "exists", "actual": nil, "missing": true},
+					{"path": "c", "operator": "equals", "actual": nil},
+					{"path": "body", "json_path": "status", "operator": "equals", "actual": "degraded"},
+					{"path": "body", "json_path": "id", "operator": "exists", "actual": nil, "missing": true},
+					{"path": "obj", "operator": "equals", "actual": map[string]any{"k": "<v>&"}},
+					{"path": "multi", "operator": "equals", "actual": "a\nb"},
+					{"path": "big", "operator": "equals", "actual": json.Number("12345678901")},
+					{"path": "frac", "operator": "equals", "actual": json.Number("1.50")},
+				},
+			}}},
+			title: "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
+				"- a.b: missing\n- c = null\n- body json status = \"degraded\"\n- body json id: missing\n" +
+				"- obj = {\"k\":\"<v>&\"}\n- multi = \"a\\nb\"\n- big = 12345678901\n- frac = 1.50",
+		},
+		{
+			name: "duplicate lines are printed once",
+			top:  map[string]any{"params": nil},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{
+				{"message": "one", "fields": []map[string]any{{"path": "x", "actual": 1}}},
+				{"message": "two", "fields": []map[string]any{{"path": "x", "actual": 1}, {"path": "x", "actual": 2}}},
+				{"message": "same"},
+				{"message": "same"},
+			}},
+			title: "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
+				"- x = 1\n- x = 2\n- same",
+		},
+		{
+			name:   "more fields than fit",
+			top:    map[string]any{"params": nil},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{{"message": "m", "fields": manyFields}}},
+			title:  "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\nfailed 3 runs in a row:\n" +
+				"- f0 = 0\n- f1 = 1\n- f2 = 2\n- f3 = 3\n- f4 = 4\n- f5 = 5\n- f6 = 6\n- f7 = 7\n- f8 = 8\n- f9 = 9\n… and 2 more",
+		},
+		{
+			name: "redacted hides failed fields",
+			top:  map[string]any{"params": nil, "redacted": true},
+			result: map[string]any{"tags": nil, "failures": []map[string]any{
+				{"message": "m", "fields": []map[string]any{{"path": "secret", "actual": "s3cr3t"}}},
+			}},
+			title: "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC",
 		},
 		{
 			name: "long multi-line failure and long param are cut",

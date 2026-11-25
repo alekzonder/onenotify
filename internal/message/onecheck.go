@@ -46,6 +46,9 @@ type event struct {
 		Consecutive int      `json:"consecutive"`
 		Failures    []struct {
 			Message string `json:"message"`
+			// Fields are the leaf fields the condition broke on; older
+			// onecheck does not send them.
+			Fields []failedField `json:"fields"`
 		} `json:"failures"`
 		Error  *string        `json:"error"`
 		Output map[string]any `json:"output"`
@@ -178,7 +181,8 @@ func failureLines(ev *event) []string {
 		}
 		return []string{"error: " + cut(oneLine(*res.Error), maxErrorLine)}
 	}
-	if len(res.Failures) == 0 {
+	reasons := failureReasons(ev)
+	if len(reasons) == 0 {
 		return nil
 	}
 	head := "failed:"
@@ -186,14 +190,78 @@ func failureLines(ev *event) []string {
 		head = fmt.Sprintf("failed %d runs in a row:", res.Consecutive)
 	}
 	lines := []string{head}
-	for i, f := range res.Failures {
+	for i, reason := range reasons {
 		if i == maxFailures {
-			lines = append(lines, fmt.Sprintf("… and %d more", len(res.Failures)-maxFailures))
+			lines = append(lines, fmt.Sprintf("… and %d more", len(reasons)-maxFailures))
 			break
 		}
-		lines = append(lines, "- "+cut(oneLine(f.Message), maxErrorLine))
+		lines = append(lines, "- "+cut(reason, maxErrorLine))
 	}
 	return lines
+}
+
+// failedField is one leaf field a failed condition broke on.
+type failedField struct {
+	Path     string `json:"path"`
+	JSONPath string `json:"json_path"`
+	Actual   any    `json:"actual"`
+	Missing  bool   `json:"missing"`
+}
+
+// failureReasons gives one line per reason the conditions failed, in their
+// order and each only once: a line per failed field of a failure, or its
+// message when onecheck sent no usable fields.
+func failureReasons(ev *event) []string {
+	var reasons []string
+	seen := map[string]bool{}
+	add := func(line string) {
+		if !seen[line] {
+			seen[line] = true
+			reasons = append(reasons, line)
+		}
+	}
+	for _, f := range ev.Result.Failures {
+		used := false
+		for _, field := range f.Fields {
+			if line := fieldLine(field); line != "" {
+				add(line)
+				used = true
+			}
+		}
+		if !used {
+			add(oneLine(f.Message))
+		}
+	}
+	return reasons
+}
+
+// fieldLine prints a failed field as "<path> = <value>" or "<path>:
+// missing", with " json <json_path>" after the path when the field is
+// inside parsed JSON. The value is JSON, so a string is quoted. A field
+// without a path gives "".
+func fieldLine(f failedField) string {
+	name := oneLine(f.Path)
+	if name == "" {
+		return ""
+	}
+	if jp := oneLine(f.JSONPath); jp != "" {
+		name += " json " + jp
+	}
+	if f.Missing {
+		return name + ": missing"
+	}
+	return name + " = " + jsonValue(f.Actual)
+}
+
+// jsonValue prints v as compact JSON on one line.
+func jsonValue(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "?"
+	}
+	return oneLine(buf.String())
 }
 
 // paramLines prints rule params as a block: a line "params:" and under it
@@ -251,11 +319,5 @@ func scalar(v any) string {
 	case nil:
 		return "null"
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return "?"
-	}
-	return oneLine(buf.String())
+	return jsonValue(v)
 }
