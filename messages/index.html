@@ -163,6 +163,7 @@ sorted</li>
 <li><code>tags: a, b</code></li>
 <li><code>at: &lt;time of the event&gt;</code> in UTC</li>
 <li>for <code>reminder</code> only: <code>failing since: &lt;time of the fail event&gt;</code> in UTC</li>
+<li>for <code>recovered</code> only: <code>failed for: &lt;how long&gt; (since &lt;time of the fail event&gt;)</code>, see <a href="#a-recovery">A recovery</a></li>
 <li>for <code>fail</code> and <code>reminder</code>: why it fails</li>
 <li>for <code>fail</code> and <code>reminder</code>: the <a href="#output-of-the-check">output of the check</a>,
 if the rule allows it</li>
@@ -299,8 +300,9 @@ is left out together with its heading.</li>
 <li>A <code>recovered</code> message never shows output: there is nothing to explain.</li>
 </ul>
 <h3 id="a-recovery"><a class="blume-heading-anchor" href="#a-recovery">A recovery</a></h3>
-<p>A <code>recovered</code> message stops after the time: only the name, the params, the
-tags and <code>at:</code>. No reason, no output.</p>
+<p>A <code>recovered</code> message stops after the time and how long the rule was
+failing: the name, the params, the tags, <code>at:</code> and <code>failed for:</code>. No reason,
+no output.</p>
 <pre class="astro-code astro-code-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[web-01] RECOVERED main/api-health</span></span>
 <span class="line"><span></span></span>
 <span class="line"><span>module: http</span></span>
@@ -308,13 +310,21 @@ tags and <code>at:</code>. No reason, no output.</p>
 <span class="line"><span>  headers.Authorization: Bearer ${API_TOKEN}</span></span>
 <span class="line"><span>  url: https://example.com/health</span></span>
 <span class="line"><span>tags: api, web</span></span>
-<span class="line"><span>at: 2026-11-24 08:11:20 UTC</span></span></code></pre>
+<span class="line"><span>at: 2026-11-24 09:23:40 UTC</span></span>
+<span class="line"><span>failed for: 1h 12m (since 2026-11-24 08:11:02 UTC)</span></span></code></pre>
+<p><code>failed for:</code> is the time from the <code>fail</code> event to the recovery, taken from
+the event’s
+<a href="https://alekzonder.github.io/onecheck/state-and-events#events"><code>failed_since</code></a>.
+It is printed as seconds under a minute (<code>45s</code>), otherwise as the days, hours
+and minutes that are not zero (<code>5m</code>, <code>1h 12m</code>, <code>2d 3h</code>); seconds beyond the
+last whole minute are dropped. A <code>recovered</code> event from an older onecheck has
+no <code>failed_since</code>, and its message has no <code>failed for:</code> line.</p>
 <h3 id="a-hidden-rule"><a class="blume-heading-anchor" href="#a-hidden-rule">A hidden rule</a></h3>
 <p>For a rule with <code>event_params: false</code> in onecheck, the event is marked
 <code>"redacted": true</code>. onenotify then leaves out the params, the reason of the
 failure and the output, whatever <code>event_output</code> says. What remains is the
-rule name in the title, the module, the tags and the time (in a reminder,
-<code>failing since:</code> too):</p>
+rule name in the title, the module, the tags and the times (in a reminder,
+<code>failing since:</code>, in a recovery, <code>failed for:</code>):</p>
 <pre class="astro-code astro-code-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[web-01] FAIL main/token-check</span></span>
 <span class="line"><span></span></span>
 <span class="line"><span>module: http</span></span>
