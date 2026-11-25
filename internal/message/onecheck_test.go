@@ -124,6 +124,47 @@ func TestFromOnecheckText(t *testing.T) {
 				"tags: api, web\nat: 2026-11-23 10:14:00 UTC",
 		},
 		{
+			name: "recovered says how long the rule failed",
+			top: map[string]any{"id": "20261123T111400Z-main-api-health-recovered", "transition": "recovered",
+				"at": "2026-11-23T11:14:00Z", "since": "2026-11-23T11:14:00Z", "failed_since": "2026-11-23T10:02:00Z",
+				"params": nil},
+			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "tags": nil},
+			title:  "[web-01] RECOVERED main/api-health", level: "ok",
+			text: "module: http\nat: 2026-11-23 11:14:00 UTC\nfailed for: 1h 12m (since 2026-11-23 10:02:00 UTC)",
+		},
+		{
+			name: "redacted recovery keeps how long the rule failed",
+			top: map[string]any{"transition": "recovered", "redacted": true,
+				"at": "2026-11-23T11:14:00Z", "failed_since": "2026-11-23T10:02:00Z"},
+			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "tags": nil},
+			title:  "[web-01] RECOVERED main/api-health", level: "ok",
+			text: "module: http\nat: 2026-11-23 11:14:00 UTC\nfailed for: 1h 12m (since 2026-11-23 10:02:00 UTC)",
+		},
+		{
+			name: "failed_since after at gives no duration",
+			top: map[string]any{"transition": "recovered", "params": nil,
+				"at": "2026-11-23T11:14:00Z", "failed_since": "2026-11-23T12:00:00Z"},
+			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "tags": nil},
+			title:  "[web-01] RECOVERED main/api-health", level: "ok",
+			text: "module: http\nat: 2026-11-23 11:14:00 UTC",
+		},
+		{
+			name: "recovery without at gives no duration",
+			top: map[string]any{"transition": "recovered", "params": nil,
+				"at": drop, "failed_since": "2026-11-23T10:02:00Z"},
+			result: map[string]any{"status": "pass", "state": "pass", "failures": []any{}, "tags": nil},
+			title:  "[web-01] RECOVERED main/api-health", level: "ok",
+			text: "module: http",
+		},
+		{
+			name:   "failed_since is read only in a recovery",
+			top:    map[string]any{"params": nil, "failed_since": "2026-11-23T09:00:00Z"},
+			result: map[string]any{"tags": nil},
+			title:  "[web-01] FAIL main/api-health", level: "error",
+			text: "module: http\nat: 2026-11-23 10:02:00 UTC\n" +
+				"failed 3 runs in a row:\n- status: expected equals 200, got 503",
+		},
+		{
 			// A param named like a field of the text must not read as one:
 			// "state: failed" in a recovery is the rule's param, not its state.
 			name: "params that look like status lines stay inside the params block",
@@ -442,5 +483,24 @@ func TestEventWithADateThatCannotBeStoredIsRejected(t *testing.T) {
 	_, err := FromOnecheck(ev(map[string]any{"at": "9999-12-31T23:59:59Z", "expires_at": drop}, nil), "h", 48*time.Hour, now)
 	if err == nil {
 		t.Error("want an error: created_at + ttl is past year 9999")
+	}
+}
+
+func TestDuration(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		0:                                 "0s",
+		45 * time.Second:                  "45s",
+		time.Minute:                       "1m",
+		59*time.Minute + 59*time.Second:   "59m",
+		time.Hour:                         "1h",
+		72 * time.Minute:                  "1h 12m",
+		24 * time.Hour:                    "1d",
+		51*time.Hour + 30*time.Second:     "2d 3h",
+		50*time.Hour + 5*time.Minute:      "2d 2h 5m",
+		400*24*time.Hour + 61*time.Minute: "400d 1h 1m",
+	} {
+		if got := duration(d); got != want {
+			t.Errorf("duration(%v) = %q, want %q", d, got, want)
+		}
 	}
 }

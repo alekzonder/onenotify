@@ -33,9 +33,12 @@ type event struct {
 	ExpiresAt  *time.Time `json:"expires_at"`
 	// Since is when the state the event reports began: for a reminder, the
 	// time of the fail event.
-	Since    *time.Time     `json:"since"`
-	Params   map[string]any `json:"params"`
-	Redacted bool           `json:"redacted"`
+	Since *time.Time `json:"since"`
+	// FailedSince is, in a recovered event, when the failure that ended
+	// began; older onecheck does not send it.
+	FailedSince *time.Time     `json:"failed_since"`
+	Params      map[string]any `json:"params"`
+	Redacted    bool           `json:"redacted"`
 	// OutputFields names the keys of Result.Output the rule allows a
 	// notification to show.
 	OutputFields []string `json:"output_fields"`
@@ -61,7 +64,8 @@ type event struct {
 // What goes into the text is fixed: module, rule params as onecheck wrote
 // them, tags, time and, for a failure and a reminder of one, the error or
 // the failed conditions and the output fields the rule allows to show. A
-// reminder also says since when the rule fails. An event marked "redacted"
+// reminder also says since when the rule fails, a recovery how long it
+// failed. An event marked "redacted"
 // gives only module, tags and times.
 func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (Message, error) {
 	var ev event
@@ -120,12 +124,7 @@ func FromOnecheck(data []byte, host string, ttl time.Duration, now time.Time) (M
 	if len(m.Tags) > 0 {
 		lines = append(lines, "tags: "+strings.Join(m.Tags, ", "))
 	}
-	if ev.At != nil && !ev.At.IsZero() {
-		lines = append(lines, "at: "+ev.At.UTC().Format(textTime))
-	}
-	if ev.Transition == transitionReminder && ev.Since != nil && !ev.Since.IsZero() {
-		lines = append(lines, "failing since: "+ev.Since.UTC().Format(textTime))
-	}
+	lines = append(lines, timeLines(&ev)...)
 	if ev.failing() && !ev.Redacted {
 		lines = append(lines, failureLines(&ev)...)
 		if ev.Result != nil {
@@ -160,6 +159,53 @@ func headline(transition string) (word, level string) {
 		return "RECOVERED", module.LevelOK
 	}
 	return strings.ToUpper(transition), module.LevelInfo
+}
+
+// timeLines gives the time of the event and, for a reminder, since when the
+// rule fails or, for a recovery, how long it failed.
+func timeLines(ev *event) []string {
+	var lines []string
+	if ev.At != nil && !ev.At.IsZero() {
+		lines = append(lines, "at: "+ev.At.UTC().Format(textTime))
+	}
+	if ev.Transition == transitionReminder && ev.Since != nil && !ev.Since.IsZero() {
+		lines = append(lines, "failing since: "+ev.Since.UTC().Format(textTime))
+	}
+	if line := failedForLine(ev); line != "" {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// failedForLine says, for a recovered event, how long the rule was failing:
+// "failed for: 1h 12m (since <time>)". Without both times, or with times
+// in the wrong order, there is no line.
+func failedForLine(ev *event) string {
+	if ev.Transition != transitionRecovered || ev.At == nil || ev.FailedSince == nil ||
+		ev.FailedSince.IsZero() || ev.FailedSince.After(*ev.At) {
+		return ""
+	}
+	return "failed for: " + duration(ev.At.Sub(*ev.FailedSince)) +
+		" (since " + ev.FailedSince.UTC().Format(textTime) + ")"
+}
+
+// duration prints d for a person: seconds under a minute ("45s"), else the
+// days, hours and minutes that are not zero ("2d 3h", "1h 12m", "5m").
+func duration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d/time.Second))
+	}
+	mins := int(d / time.Minute)
+	parts := []string{}
+	for _, u := range []struct {
+		n    int
+		name string
+	}{{mins / (24 * 60), "d"}, {mins / 60 % 24, "h"}, {mins % 60, "m"}} {
+		if u.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d%s", u.n, u.name))
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // failing reports whether the event tells of a rule that fails: the failure
