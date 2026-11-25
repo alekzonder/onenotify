@@ -1,4 +1,6 @@
-# Queue and delivery
+---
+title: Queue and delivery
+---
 
 onenotify keeps every message on disk from the moment it takes an event until
 a provider has accepted the message. This page describes where messages lie,

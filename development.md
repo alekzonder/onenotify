@@ -1,4 +1,6 @@
-# Development
+---
+title: Development
+---
 
 Rules for contributors (commit messages, merges, limits) are in
 [AGENTS.md](https://github.com/alekzonder/onenotify/blob/main/AGENTS.md). This page is about how to build, test and release.
@@ -217,6 +219,20 @@ base `/onenotify` itself; it does not rewrite relative `.md` links, so they
 would break on the site. `scripts/docs-check-links.sh` fails the build when
 one appears. Links from outside the site (README, CLI messages) use the full
 URL `https://alekzonder.github.io/onenotify/<route>`.
+
+**A page's title goes into its front matter, never into a `# ` heading:**
+
+```markdown
+---
+title: Messages
+---
+
+## First section
+```
+
+Blume prints the title above the page itself, so a `# Messages` line would
+show it a second time. Sections start at `##`. The same script fails the
+build on a `# ` heading outside a code block.
 
 Console examples in the documentation are real output of the tool. When
 behaviour or wording changes, run the command again and replace the example.

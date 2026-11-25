@@ -118,8 +118,6 @@ writes a `reminder` event, and onenotify delivers it like any other.
 # Configuration
 Source: https://alekzonder.github.io/onenotify/configuration
 
-# Configuration
-
 The config is YAML. Unknown keys are errors, so a typo never goes unnoticed.
 Check a config without sending anything: `onenotify validate -c <file>`.
 
@@ -462,8 +460,6 @@ followed by the error, and the exit code is `2`.
 # Development
 Source: https://alekzonder.github.io/onenotify/development
 
-# Development
-
 Rules for contributors (commit messages, merges, limits) are in
 [AGENTS.md](https://github.com/alekzonder/onenotify/blob/main/AGENTS.md). This page is about how to build, test and release.
 
@@ -682,6 +678,20 @@ would break on the site. `scripts/docs-check-links.sh` fails the build when
 one appears. Links from outside the site (README, CLI messages) use the full
 URL `https://alekzonder.github.io/onenotify/<route>`.
 
+**A page's title goes into its front matter, never into a `# ` heading:**
+
+```markdown
+---
+title: Messages
+---
+
+## First section
+```
+
+Blume prints the title above the page itself, so a `# Messages` line would
+show it a second time. Sections start at `##`. The same script fails the
+build on a `# ` heading outside a code block.
+
 Console examples in the documentation are real output of the tool. When
 behaviour or wording changes, run the command again and replace the example.
 
@@ -698,8 +708,6 @@ site always shows the latest release.
 
 # Getting started
 Source: https://alekzonder.github.io/onenotify/getting-started
-
-# Getting started
 
 ## Install
 
@@ -1046,8 +1054,6 @@ For other users everything lives under `$HOME/.local/state/onenotify/` and
 # Logging and logrotate
 Source: https://alekzonder.github.io/onenotify/logging-and-logrotate
 
-# Logging and logrotate
-
 ## Log file
 
 Every run appends to
@@ -1231,8 +1237,6 @@ Events nobody took from onecheck's queue are not onenotify's to clean:
 
 # Messages
 Source: https://alekzonder.github.io/onenotify/messages
-
-# Messages
 
 Everything onenotify delivers is a **message**: a title, a text, a level and a
 few fields around them. A message is built in one of two ways: from a onecheck
@@ -1637,8 +1641,6 @@ the time of the call plus `queue.ttl`. See [Sending](/sending).
 # Module management
 Source: https://alekzonder.github.io/onenotify/module-management
 
-# Module management
-
 A module is an executable file named `onenotify-<name>` in the modules
 directory (`paths.modules`). onenotify reads that directory on every run:
 there is no registry to refresh and nothing to restart. A module is usable
@@ -1830,8 +1832,6 @@ modules:
 
 # Module protocol
 Source: https://alekzonder.github.io/onenotify/module-protocol
-
-# Module protocol
 
 This page is for people writing a module. A module teaches onenotify a new
 place to deliver to: a chat, a paging service, an SMS gateway, a webhook,
@@ -2719,8 +2719,6 @@ and `bot is not a member of the channel chat` say what is missing.
 # Output and exit codes
 Source: https://alekzonder.github.io/onenotify/output-and-exit-codes
 
-# Output and exit codes
-
 A run reports its outcome in four places:
 
 | Where | What | For |
@@ -2930,8 +2928,6 @@ see [Logging and logrotate](/logging-and-logrotate).
 
 # Queue and delivery
 Source: https://alekzonder.github.io/onenotify/queue-and-delivery
-
-# Queue and delivery
 
 onenotify keeps every message on disk from the moment it takes an event until
 a provider has accepted the message. This page describes where messages lie,
@@ -3415,8 +3411,6 @@ and mode.
 
 # Sending your own messages
 Source: https://alekzonder.github.io/onenotify/sending
-
-# Sending your own messages
 
 `onenotify send` sends a message of your own through the channels of the
 config. It is how a backup script, a deploy script or a cron job tells you

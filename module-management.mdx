@@ -1,4 +1,6 @@
-# Module management
+---
+title: Module management
+---
 
 A module is an executable file named `onenotify-<name>` in the modules
 directory (`paths.modules`). onenotify reads that directory on every run:

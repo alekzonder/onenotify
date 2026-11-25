@@ -1,4 +1,6 @@
-# Output and exit codes
+---
+title: Output and exit codes
+---
 
 A run reports its outcome in four places:
 

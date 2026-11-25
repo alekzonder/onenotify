@@ -1,4 +1,6 @@
-# Module protocol
+---
+title: Module protocol
+---
 
 This page is for people writing a module. A module teaches onenotify a new
 place to deliver to: a chat, a paging service, an SMS gateway, a webhook,
