@@ -92,8 +92,10 @@ nothing to say:
 3. `tags: a, b`
 4. `at: <time of the event>` in UTC
 5. for `reminder` only: `failing since: <time of the fail event>` in UTC
-6. for `fail` and `reminder`: why it fails
-7. for `fail` and `reminder`: the [output of the check](#output-of-the-check),
+6. for `recovered` only: `failed for: <how long> (since <time of the fail
+   event>)`, see [A recovery](#a-recovery)
+7. for `fail` and `reminder`: why it fails
+8. for `fail` and `reminder`: the [output of the check](#output-of-the-check),
    if the rule allows it
 
 ### A failed check
@@ -243,8 +245,9 @@ rsync error: error in rsync protocol data stream (code 12) at io.c(232)
 
 ### A recovery
 
-A `recovered` message stops after the time: only the name, the params, the
-tags and `at:`. No reason, no output.
+A `recovered` message stops after the time and how long the rule was
+failing: the name, the params, the tags, `at:` and `failed for:`. No reason,
+no output.
 
 ```
 [web-01] RECOVERED main/api-health
@@ -254,16 +257,25 @@ params:
   headers.Authorization: Bearer ${API_TOKEN}
   url: https://example.com/health
 tags: api, web
-at: 2026-11-24 08:11:20 UTC
+at: 2026-11-24 09:23:40 UTC
+failed for: 1h 12m (since 2026-11-24 08:11:02 UTC)
 ```
+
+`failed for:` is the time from the `fail` event to the recovery, taken from
+the event's
+[`failed_since`](https://alekzonder.github.io/onecheck/state-and-events#events).
+It is printed as seconds under a minute (`45s`), otherwise as the days, hours
+and minutes that are not zero (`5m`, `1h 12m`, `2d 3h`); seconds beyond the
+last whole minute are dropped. A `recovered` event from an older onecheck has
+no `failed_since`, and its message has no `failed for:` line.
 
 ### A hidden rule
 
 For a rule with `event_params: false` in onecheck, the event is marked
 `"redacted": true`. onenotify then leaves out the params, the reason of the
 failure and the output, whatever `event_output` says. What remains is the
-rule name in the title, the module, the tags and the time (in a reminder,
-`failing since:` too):
+rule name in the title, the module, the tags and the times (in a reminder,
+`failing since:`, in a recovery, `failed for:`):
 
 ```
 [web-01] FAIL main/token-check
