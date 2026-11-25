@@ -41,8 +41,8 @@ params:
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
-- body json status: expected equals "ok", got "degraded"
-- status: expected equals 200, got 503
+- body json status = "degraded"
+- status = 503
 ```
 
 ## How it works
@@ -1255,7 +1255,7 @@ A message as it lies in a channel's queue:
   "host": "web-01",
   "level": "error",
   "title": "[web-01] FAIL main/api-health",
-  "text": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
+  "text": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status = \"degraded\"\n- status = 503",
   "tags": [
     "api",
     "web"
@@ -1340,14 +1340,44 @@ params:
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
-- body json status: expected equals "ok", got "degraded"
-- status: expected equals 200, got 503
+- body json status = "degraded"
+- status = 503
 ```
 
 The first line is the title, the rest is the text. `failed 3 runs in a row:`
 is the rule's count of consecutive failures (`fail_after: 3` here); a rule
-that failed once says `failed:`. Below it is one line per condition that did
-not hold, with onecheck's own message.
+that failed once says `failed:`. Below it is one line per field the failed
+conditions broke on, as onecheck reports them in a failure's
+[`fields`](https://alekzonder.github.io/onecheck/output-and-results#failed-fields):
+
+| Line | When |
+|---|---|
+| `- <path> = <value>` | the field has a value that did not satisfy the condition |
+| `- <path>: missing` | the field is not there |
+| `- <path> json <json_path> = <value>` | the field is inside JSON the check parsed, such as a response body |
+| `- <path> json <json_path>: missing` | the same, and the field is not there |
+
+`<path>` is the full path, with the index of a list element, so a condition
+over a list names the element that broke it:
+
+```
+failed:
+- containers.#(state=="running")#.2.name = "smoke-tls-proxy"
+```
+
+The value is printed as JSON: a string is in quotes, so `"200"` and `200`
+differ; an object or a list is compact JSON. The condition's operator and
+expected value are not repeated: they are in the rule. A line that is the
+same as one above it is left out.
+
+An event from an older onecheck has no `fields`. Each failed condition then
+gets one line with onecheck's own message, as before:
+
+```
+failed 3 runs in a row:
+- body json status: expected equals "ok", got "degraded"
+- status: expected equals 200, got 503
+```
 
 ### A check that could not run
 
@@ -1384,7 +1414,7 @@ tags: api, web
 at: 2026-11-24 09:11:14 UTC
 failing since: 2026-11-24 08:11:02 UTC
 failed 63 runs in a row:
-- status: expected equals 200, got 502
+- status = 502
 ```
 
 `failing since:` is the time of the `fail` event. The reason is that of the
@@ -1419,7 +1449,7 @@ params:
 tags: backup
 at: 2026-11-24 03:00:41 UTC
 failed:
-- exit_code: expected equals 0, got 12
+- exit_code = 12
 stderr:
 …
 rsync: connection unexpectedly closed (0 bytes received so far) [sender]
@@ -1506,8 +1536,8 @@ A notification must stay readable in a chat, so the text is bounded:
 |---|---|---|
 | one param value | 200 characters | cut, ends with `…` |
 | param lines | 20 | the rest is replaced by an indented `… and N more params` |
-| failed conditions | 10 | the rest is replaced by `… and N more` |
-| an error or one condition's message | 300 characters | cut, ends with `…` |
+| lines under `failed:` | 10 | the rest is replaced by `… and N more` |
+| an error, one field line or one condition's message | 300 characters | cut, ends with `…` |
 | one output field | the last 20 lines, 1000 characters | the beginning is left out, marked with `…` |
 
 Line breaks, tabs and other control characters inside a value, an error or a
@@ -2291,8 +2321,8 @@ params:
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
-- body json status: expected equals "ok", got "degraded"
-- status: expected equals 200, got 503
+- body json status = "degraded"
+- status = 503
 ```
 
 - The mail is `text/plain` in UTF-8. There is no HTML part and there are no
@@ -2435,7 +2465,7 @@ This is what the module publishes for a failed check:
 {
   "topic": "my-server-alerts",
   "title": "[web-01] FAIL main/api-health",
-  "message": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
+  "message": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status = \"degraded\"\n- status = 503",
   "priority": 4,
   "tags": ["rotating_light", "api", "web"]
 }
@@ -2596,8 +2626,8 @@ params:
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
-- body json status: expected equals "ok", got "degraded"
-- status: expected equals 200, got 503
+- body json status = "degraded"
+- status = 503
 ```
 
 | Level | Icon | Sound |

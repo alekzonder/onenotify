@@ -49,8 +49,8 @@ params:
 tags: api, web
 at: 2026-11-24 08:11:02 UTC
 failed 3 runs in a row:
-- body json status: expected equals "ok", got "degraded"
-- status: expected equals 200, got 503
+- body json status = "degraded"
+- status = 503
 ```
 
 | Level | Icon | Sound |
