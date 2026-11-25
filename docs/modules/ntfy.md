@@ -45,7 +45,7 @@ This is what the module publishes for a failed check:
 {
   "topic": "my-server-alerts",
   "title": "[web-01] FAIL main/api-health",
-  "message": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status: expected equals \"ok\", got \"degraded\"\n- status: expected equals 200, got 503",
+  "message": "module: http\nparams:\n  headers.Authorization: Bearer ${API_TOKEN}\n  url: https://example.com/health\ntags: api, web\nat: 2026-11-24 08:11:02 UTC\nfailed 3 runs in a row:\n- body json status = \"degraded\"\n- status = 503",
   "priority": 4,
   "tags": ["rotating_light", "api", "web"]
 }
